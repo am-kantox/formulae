@@ -39,7 +39,7 @@ defmodule Formulae.Mixfile do
 
   defp description do
     """
-    Adds `mix` tasks to easily issue (publish) new versions.
+    A set of functions to deal with analytical formulae.
     """
   end
 

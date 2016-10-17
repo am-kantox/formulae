@@ -1,5 +1,9 @@
 defmodule Formulae do
 
+  @moduledoc ~S"""
+  Module to work with analytical
+  """
+
   ##############################################################################
 
   @doc ~S"""
