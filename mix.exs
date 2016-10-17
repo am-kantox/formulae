@@ -29,7 +29,7 @@ defmodule Formulae.Mixfile do
   # Type "mix help deps" for more examples and options
   defp deps do
     [
-      {:bunt, "~> 0.1"},
+      {:issuer, "~> 0.1"},
       {:ex_ncurses, git: "https://github.com/jfreeze/ex_ncurses.git", only: [:dev, :test]},
 
       {:credo, "~> 0.4", only: [:dev]},

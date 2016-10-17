@@ -3,4 +3,5 @@
   "earmark": {:hex, :earmark, "1.0.2", "a0b0904d74ecc14da8bd2e6e0248e1a409a2bc91aade75fcf428125603de3853", [:mix], []},
   "elixir_make": {:hex, :elixir_make, "0.3.0", "285147fa943806eee82f6680b7b446b5569bcf3ee8328fa0a7c200ffc44fbaba", [:mix], []},
   "ex_doc": {:hex, :ex_doc, "0.14.3", "e61cec6cf9731d7d23d254266ab06ac1decbb7651c3d1568402ec535d387b6f7", [:mix], [{:earmark, "~> 1.0", [hex: :earmark, optional: false]}]},
-  "ex_ncurses": {:git, "https://github.com/jfreeze/ex_ncurses.git", "303954b2debec4b481302215017c6fbc3693772f", []}}
+  "ex_ncurses": {:git, "https://github.com/jfreeze/ex_ncurses.git", "303954b2debec4b481302215017c6fbc3693772f", []},
+  "issuer": {:hex, :issuer, "0.1.2", "ed5261a00d18b07c60664154bd2131191cabc08f2ca4d009ed0b7232873708d3", [:mix], [{:bunt, "~> 0.1", [hex: :bunt, optional: false]}]}}
