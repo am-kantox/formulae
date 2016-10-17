@@ -45,11 +45,11 @@ defmodule Formulae.Mixfile do
 
   defp package do
     [ # These are the default files included in the package
-     name: :issuer,
+     name: :formulae,
      files: ["lib", "config", "mix.exs", "README*"],
      maintainers: ["Aleksei Matiushkin"],
      licenses: ["MIT"],
-     links: %{"GitHub" => "https://github.com/am-kantox/issuer",
-              "Docs" => "https://hexdocs.pm/issuer"}]
+     links: %{"GitHub" => "https://github.com/am-kantox/formulae",
+              "Docs" => "https://hexdocs.pm/formulae"}]
   end
 end
