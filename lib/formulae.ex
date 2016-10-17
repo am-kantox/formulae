@@ -20,7 +20,7 @@ defmodule Formulae do
     try do
       Formulae.evaluate(string, bindings)
     rescue
-      Formulae.Runner -> false
+      Formulae.RunnerError -> false
     end
   end
 
@@ -60,7 +60,7 @@ defmodule Formulae do
       Formulae.evaluate(string, bindings)
       bindings |> Keyword.keys
     rescue
-      e in Formulae.Runner ->
+      e in Formulae.RunnerError ->
         case e.error do
           {:compile, message} ->
             neu = @binding_finder
@@ -114,10 +114,10 @@ defmodule Formulae do
          [3, {:+, [line: 1], [{:a, [line: 1], nil}, 2]}]}, 0]}
 
       iex> Formulae.unit("3 >= a + 2")
-      ** (Formulae.Syntax) Formula [3 >= a + 2] syntax is incorrect (operation): “>=”.
+      ** (Formulae.SyntaxError) Formula [3 >= a + 2] syntax is incorrect (operation): “>=”.
 
       iex> Formulae.unit("3 a > a + 2")
-      ** (Formulae.Syntax) Formula [3 a > a + 2] syntax is incorrect (parsing): syntax error before: “a”.
+      ** (Formulae.SyntaxError) Formula [3 a > a + 2] syntax is incorrect (parsing): syntax error before: “a”.
 
       iex> Formulae.unit("a + 2 = 3")
       {:==, [], [{:+, [line: 1], [{:a, [line: 1], nil}, 2]}, 3]}
@@ -136,9 +136,9 @@ defmodule Formulae do
       {:ok, {:=, _, [lh, rh]}} when is_integer(rh) or is_float(rh) or is_binary(rh) or is_boolean(rh) or is_nil(rh) -> {:==, env, [lh, rh]}
       {:ok, {:=, _, [lh, rh]}} -> {:==, lh - rh}
 
-      {:ok, {op, _, _}} -> raise(Formulae.Syntax, formula: input, error: {:operation, double_quote(op)})
-      {:error, {1, message, op}} -> raise(Formulae.Syntax, formula: input, error: {:parsing,  message <> double_quote(op)})
-      other -> raise(Formulae.Syntax, formula: input, error: {:unknown, inspect(other)})
+      {:ok, {op, _, _}} -> raise(Formulae.SyntaxError, formula: input, error: {:operation, double_quote(op)})
+      {:error, {1, message, op}} -> raise(Formulae.SyntaxError, formula: input, error: {:parsing,  message <> double_quote(op)})
+      other -> raise(Formulae.SyntaxError, formula: input, error: {:unknown, inspect(other)})
     end
   end
 
@@ -161,7 +161,7 @@ defmodule Formulae do
 
       # This test issues a warning about “variable "a" does not exist and is being expanded to "a()"”
       iex> Formulae.evaluate(Formulae.unit("a < 2"), [])
-      ** (Formulae.Runner) Formula failed to run (compile): undefined function a/0.
+      ** (Formulae.RunnerError) Formula failed to run (compile): undefined function a/0.
 
       iex> Formulae.evaluate(Formulae.unit("a + 2 = 3"), [a: 1])
       true
@@ -190,10 +190,10 @@ defmodule Formulae do
       case Code.eval_quoted(input, binding, opts) do
         {false, ^binding} -> false
         {true,  ^binding} -> true
-        other             -> raise(Formulae.Runner, formula: input, error: {:weird, inspect(other)})
+        other             -> raise(Formulae.RunnerError, formula: input, error: {:weird, inspect(other)})
       end
     rescue
-      e in CompileError -> raise(Formulae.Runner, formula: input, error: {:compile, e.description})
+      e in CompileError -> raise(Formulae.RunnerError, formula: input, error: {:compile, e.description})
     end
   end
   def evaluate(input, binding, opts) when is_binary(input) do
@@ -235,19 +235,19 @@ defmodule Formulae do
     "sumOaSTS3E14CSMSb"
 
     iex> "sum(a * 3.14) - b ± 3" |> Formulae.rigid!
-    ** (Formulae.Syntax) Formula [sum(a * 3.14) - b ± 3] syntax is incorrect (symbols): NYI.
+    ** (Formulae.SyntaxError) Formula [sum(a * 3.14) - b ± 3] syntax is incorrect (symbols): NYI.
 
   """
   def rigid!(ast) when is_binary(ast) do
     result = Regex.replace(@regexps |> List.first, ast, fn key, _ -> @fun_to_var[key] end)
     # FIXME Regex.replace(~r|\w|, result, fn _, _ -> "" end)})
-    if result |> rigid?(false), do: result, else: raise(Formulae.Syntax, formula: ast, error: {:symbols, "NYI"})
+    if result |> rigid?(false), do: result, else: raise(Formulae.SyntaxError, formula: ast, error: {:symbols, "NYI"})
   end
 
   def rigid!(ast) when is_tuple(ast) do
     case ast |> rigid do
       {result, _} -> result
-      other -> raise(Formulae.Syntax, formula: inspect(other), error: {:ast, "NYI"})
+      other -> raise(Formulae.SyntaxError, formula: inspect(other), error: {:ast, "NYI"})
     end
   end
 
@@ -259,11 +259,11 @@ defmodule Formulae do
     iex> "sumOaSTS3E14CSMSb" |> Formulae.unrigid!
     "sum(a * 3.14) - b"
     iex> "sum(a * 3.14) - b ± 3" |> Formulae.unrigid!
-    ** (Formulae.Syntax) Formula [sum(a * 3.14) - b ± 3] syntax is incorrect (not_rigid): NYI.
+    ** (Formulae.SyntaxError) Formula [sum(a * 3.14) - b ± 3] syntax is incorrect (not_rigid): NYI.
 
   """
   def unrigid!(var) when is_binary(var) do
-    unless var |> rigid?(false), do: raise(Formulae.Syntax, formula: var, error: {:not_rigid, "NYI"})
+    unless var |> rigid?(false), do: raise(Formulae.SyntaxError, formula: var, error: {:not_rigid, "NYI"})
     if var |> rigid?(true), do: var, else: Regex.replace(@regexps |> List.last, var, fn key, _ -> @var_to_fun[key] end)
   end
 
