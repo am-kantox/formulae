@@ -1,7 +1,7 @@
 defmodule Formulae do
 
   @moduledoc ~S"""
-  Module to work with analytical
+  A set of functions to deal with analytical formulae.
   """
 
   ##############################################################################
@@ -43,6 +43,41 @@ defmodule Formulae do
   def normalize(string) when is_binary(string) do
     {operation, _, [formula, value]} = string |> unit
     {operation, formula |> rigid, value}
+  end
+
+  @doc ~S"""
+  Curries the formula by substituting the known bindings into it.
+
+  ## Example
+
+      iex> "(temp - time * 4) > speed / 3.14" |> Formulae.curry(temp: 7, speed: 3.14) |> Macro.to_string
+      "{7 - time * 4 - 1.0 > 0, {}}"
+  """
+  def curry(input, bindings \\ [], opts \\ [])
+  def curry(input, binding, opts) when is_tuple(input) do
+    pre = fn t, any ->
+      {t, any}
+    end
+    post = fn t, any ->
+      t = try do
+            {var, _, values} = t
+            case binding[var] do
+              nil ->
+                {result, _ } = Code.eval_quoted(t, binding, opts)
+                result
+              other -> other
+            end
+          rescue
+            # %CompileError{description: description} = e # FIXME "undefined function time/0"
+            e in [CompileError, MatchError] -> t
+          end
+      # IO.inspect ["PST", t, any]
+      {t, any}
+    end
+    Macro.traverse(input, {}, pre, post)
+  end
+  def curry(input, binding, opts) when is_binary(input) do
+    curry(input |> unit, binding, opts)
   end
 
   @binding_finder ~r|undefined function (\w+)/0|
