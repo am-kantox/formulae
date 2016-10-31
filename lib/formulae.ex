@@ -39,6 +39,9 @@ defmodule Formulae do
 
       iex> "hello < 3.14" |> Formulae.normalize
       {:<, {"hello", "hello"}, 3.14}
+
+      iex> "HELLO < 3.14" |> Formulae.normalize
+      {:<, {"hello", "hello"}, 3.14}
   """
   def normalize(string) when is_binary(string) do
     {operation, _, [formula, value]} = string |> unit
@@ -147,7 +150,7 @@ defmodule Formulae do
       iex> Formulae.unit("3 - a > 2")
       {:>, [], [{:-, [line: 1], [3, {:a, [line: 1], nil}]}, 2]}
 
-      iex> Formulae.unit("3 > a + 2")
+      iex> Formulae.unit("3 > A + 2")
       {:>, [],
        [{:-, [context: Formulae, import: Kernel],
          [3, {:+, [line: 1], [{:a, [line: 1], nil}, 2]}]}, 0]}
@@ -155,17 +158,17 @@ defmodule Formulae do
       iex> Formulae.unit("3 >= a + 2")
       ** (Formulae.SyntaxError) Formula [3 >= a + 2] syntax is incorrect (operation): “>=”.
 
-      iex> Formulae.unit("3 a > a + 2")
-      ** (Formulae.SyntaxError) Formula [3 a > a + 2] syntax is incorrect (parsing): syntax error before: “a”.
+      iex> Formulae.unit("3 a > A + 2")
+      ** (Formulae.SyntaxError) Formula [3 a > A + 2] syntax is incorrect (parsing): syntax error before: “a”.
 
       iex> Formulae.unit("a + 2 = 3")
       {:==, [], [{:+, [line: 1], [{:a, [line: 1], nil}, 2]}, 3]}
 
-      iex> Formulae.unit(~S|a = "3"|)
+      iex> Formulae.unit(~S|A = "3"|)
       {:==, [], [{:a, [line: 1], nil}, "3"]}
   """
   def unit(input, env \\ []) when is_binary(input) do
-    case Code.string_to_quoted(input) do
+    case Code.string_to_quoted(input |> String.downcase) do
       {:ok, {:>, _, [lh, rh]}} when is_integer(rh) or is_float(rh) -> {:>, env, [lh, rh]}
       {:ok, {:>, _, [lh, rh]}} -> {:>, env, [(quote do: unquote(lh) - unquote(rh)), 0]}
 
