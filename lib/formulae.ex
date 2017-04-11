@@ -41,11 +41,11 @@ defmodule Formulae do
       {:<, {"hello", "hello"}, 3.14}
 
       iex> "HELLO < 3.14" |> Formulae.normalize
-      {:<, {"hello", "hello"}, 3.14}
+      {:<, {"hello", "HELLO"}, 3.14}
   """
   def normalize(string) when is_binary(string) do
-    {operation, _, [formula, value]} = string |> unit
-    {operation, formula |> rigid, value}
+    {operation, _, [formula, value]} = unit(string)
+    {operation, rigid(formula), value}
   end
 
   @doc ~S"""
@@ -56,14 +56,12 @@ defmodule Formulae do
       iex> "(temp - time * 4) > speed / 3.14" |> Formulae.curry(temp: 7, speed: 3.14) |> Macro.to_string
       "{7 - time * 4 - 1.0 > 0, {}}"
   """
-  def curry(input, bindings \\ [], opts \\ [])
+  def curry(input, bindings \\ [], opts \\ __ENV__)
   def curry(input, binding, opts) when is_tuple(input) do
-    pre = fn t, any ->
-      {t, any}
-    end
+    pre = fn t, any -> {t, any} end
     post = fn t, any ->
       t = try do
-            {var, _, values} = t
+            {var, _, _values} = t
             case binding[var] do
               nil ->
                 {result, _ } = Code.eval_quoted(t, binding, opts)
@@ -71,16 +69,14 @@ defmodule Formulae do
               other -> other
             end
           rescue
-            # %CompileError{description: description} = e # FIXME "undefined function time/0"
-            e in [CompileError, MatchError] -> t
+            _e in [CompileError, MatchError] -> t
           end
-      # IO.inspect ["PST", t, any]
       {t, any}
     end
     Macro.traverse(input, {}, pre, post)
   end
   def curry(input, binding, opts) when is_binary(input) do
-    curry(input |> unit, binding, opts)
+    curry(unit(input), binding, opts)
   end
 
   @binding_finder ~r|undefined function (\w+)/0|
@@ -117,7 +113,7 @@ defmodule Formulae do
 
   ##############################################################################
 
-  @comparison [:<, :>, :=] # Damn it, José! :≠
+  # @comparison [:<, :>, :=] # Damn it, José! :≠
   # @booleans   [:&, :|]
 
   @surrogates [" ()+-*/.", "SOCPMTDE"]
@@ -153,7 +149,7 @@ defmodule Formulae do
       iex> Formulae.unit("3 > A + 2")
       {:>, [],
        [{:-, [context: Formulae, import: Kernel],
-         [3, {:+, [line: 1], [{:a, [line: 1], nil}, 2]}]}, 0]}
+         [3, {:+, [line: 1], [{:__aliases__, [counter: 0, line: 1], [:A]}, 2]}]}, 0]}
 
       iex> Formulae.unit("3 >= a + 2")
       ** (Formulae.SyntaxError) Formula [3 >= a + 2] syntax is incorrect (operation): “>=”.
@@ -165,10 +161,10 @@ defmodule Formulae do
       {:==, [], [{:+, [line: 1], [{:a, [line: 1], nil}, 2]}, 3]}
 
       iex> Formulae.unit(~S|A = "3"|)
-      {:==, [], [{:a, [line: 1], nil}, "3"]}
+      {:==, [], [{:__aliases__, [counter: 0, line: 1], [:A]}, "3"]}
   """
   def unit(input, env \\ []) when is_binary(input) do
-    case Code.string_to_quoted(input |> String.downcase) do
+    case Code.string_to_quoted(input) do #  |> String.downcase
       {:ok, {:>, _, [lh, rh]}} when is_integer(rh) or is_float(rh) -> {:>, env, [lh, rh]}
       {:ok, {:>, _, [lh, rh]}} -> {:>, env, [(quote do: unquote(lh) - unquote(rh)), 0]}
 
@@ -225,6 +221,9 @@ defmodule Formulae do
 
       iex> Formulae.evaluate(~S|a = "3"|, [a: "3"])
       true
+
+      iex> Formulae.evaluate(Formulae.unit("a_b_c_490000 > 2"), [a_b_c_490000: 3])
+      true
   """
   def evaluate(input, binding \\ [], opts \\ [])
   def evaluate(input, binding, opts) when is_tuple(input) do
@@ -250,6 +249,9 @@ defmodule Formulae do
       iex> Formulae.rigid?("hello")
       true
 
+      iex> Formulae.rigid?("HELLO")
+      false
+
       iex> Formulae.rigid?("hello world!")
       false
 
@@ -264,8 +266,8 @@ defmodule Formulae do
   end
 
   def rigid(ast) when is_tuple(ast) do
-    string = ast |> Macro.to_string
-    {string |> rigid!, string}
+    string = Macro.to_string(ast)
+    {rigid!(string), string}
   end
 
   @doc ~S"""
@@ -281,13 +283,19 @@ defmodule Formulae do
 
   """
   def rigid!(ast) when is_binary(ast) do
-    result = Regex.replace(@regexps |> List.first, ast, fn key, _ -> @fun_to_var[key] end)
-    # FIXME Regex.replace(~r|\w|, result, fn _, _ -> "" end)})
-    if result |> rigid?(false), do: result, else: raise(Formulae.SyntaxError, formula: ast, error: {:symbols, "NYI"})
+    with [regexp_first | _] <- @regexps,
+         ast <- String.downcase(ast),
+         result <- Regex.replace(regexp_first, ast, fn key, _ -> @fun_to_var[key] end),
+         true <- rigid?(result, false) do
+      result
+    else
+      false -> raise(Formulae.SyntaxError, formula: ast, error: {:symbols, "NYI"})
+      other -> raise(Formulae.SyntaxError, formula: ast, error: {:symbols, inspect(other)})
+    end
   end
 
   def rigid!(ast) when is_tuple(ast) do
-    case ast |> rigid do
+    case rigid(ast) do
       {result, _} -> result
       other -> raise(Formulae.SyntaxError, formula: inspect(other), error: {:ast, "NYI"})
     end
@@ -305,8 +313,8 @@ defmodule Formulae do
 
   """
   def unrigid!(var) when is_binary(var) do
-    unless var |> rigid?(false), do: raise(Formulae.SyntaxError, formula: var, error: {:not_rigid, "NYI"})
-    if var |> rigid?(true), do: var, else: Regex.replace(@regexps |> List.last, var, fn key, _ -> @var_to_fun[key] end)
+    unless rigid?(var, false), do: raise(Formulae.SyntaxError, formula: var, error: {:not_rigid, "NYI"})
+    if rigid?(var, true), do: var, else: Regex.replace(@regexps |> List.last, var, fn key, _ -> @var_to_fun[key] end)
   end
 
   ##############################################################################
