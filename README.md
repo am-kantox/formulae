@@ -10,7 +10,7 @@ If [available in Hex](https://hex.pm/docs/publish), the package can be installed
 
     ```elixir
     def deps do
-      [{:formulae, "~> 0.1.0"}]
+      [{:formulae, "~> 0.1.1"}]
     end
     ```
 
