@@ -14,7 +14,25 @@ defmodule Formulae do
       iex> "a > 5" |> Formulae.check([a: 6])
       true
 
+      iex> "a > 5" |> Formulae.check([a: 5])
+      false
+
       iex> "a > 5" |> Formulae.check([a: 3])
+      false
+
+      iex> "a < 5" |> Formulae.check([b: 42])
+      false
+
+      iex> "a > 5" |> Formulae.check([a: nil])
+      false
+
+      iex> "a < 5" |> Formulae.check([{:a, nil}])
+      false
+
+      iex> "a > 5" |> Formulae.check([{:a, 6}])
+      true
+
+      iex> "a > 5" |> Formulae.check([{:a, 5}])
       false
 
       iex> "a > 5" |> Formulae.check
@@ -227,6 +245,8 @@ defmodule Formulae do
   """
   def evaluate(input, binding \\ [], opts \\ [])
   def evaluate(input, binding, opts) when is_tuple(input) do
+    # FIXME Make `nil` acceptable through SQL-like `IS NULL` syntax!
+    binding = Enum.filter(binding, fn {_, v} -> !is_nil(v) end)
     try do
       case Code.eval_quoted(input, binding, opts) do
         {false, ^binding} -> false
