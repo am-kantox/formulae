@@ -71,8 +71,8 @@ defmodule Formulae do
 
   ## Example
 
-      iex> "(temp - time * 4) > speed / 3.14" |> Formulae.curry(temp: 7, speed: 3.14) |> Macro.to_string
-      "{7 - time * 4 - 1.0 > 0, {}}"
+      iex> "(temp - foo * 4) > speed / 3.14" |> Formulae.curry(temp: 7, speed: 3.14) |> Macro.to_string
+      "{7 - foo * 4 - 1.0 > 0, {}}"
   """
   def curry(input, bindings \\ [], opts \\ __ENV__)
   def curry(input, binding, opts) when is_tuple(input) do
@@ -87,7 +87,7 @@ defmodule Formulae do
               other -> other
             end
           rescue
-            _e in [CompileError, MatchError] -> t
+            _e in [CompileError, MatchError, UndefinedFunctionError] -> t
           end
       {t, any}
     end
@@ -166,11 +166,13 @@ defmodule Formulae do
 
       iex> Formulae.unit("3 > A + 2")
       {:>, [],
-       [{:-, [context: Formulae, import: Kernel],
-         [3, {:+, [line: 1], [{:__aliases__, [counter: 0, line: 1], [:A]}, 2]}]}, 0]}
+        [{:-, [context: Formulae, import: Kernel],
+          [3, {:+, [line: 1], [{:__aliases__, [counter: 0, line: 1], [:A]}, 2]}]}, 0]}
 
       iex> Formulae.unit("3 >= a + 2")
-      ** (Formulae.SyntaxError) Formula [3 >= a + 2] syntax is incorrect (operation): “>=”.
+      {:>=, [],
+        [{:-, [context: Formulae, import: Kernel],
+          [3, {:+, [line: 1], [{:a, [line: 1], nil}, 2]}]}, 0]}
 
       iex> Formulae.unit("3 a > A + 2")
       ** (Formulae.SyntaxError) Formula [3 a > A + 2] syntax is incorrect (parsing): syntax error before: “a”.
@@ -186,11 +188,26 @@ defmodule Formulae do
       {:ok, {:>, _, [lh, rh]}} when is_integer(rh) or is_float(rh) -> {:>, env, [lh, rh]}
       {:ok, {:>, _, [lh, rh]}} -> {:>, env, [(quote do: unquote(lh) - unquote(rh)), 0]}
 
+      {:ok, {:>=, _, [lh, rh]}} when is_integer(rh) or is_float(rh) -> {:>=, env, [lh, rh]}
+      {:ok, {:>=, _, [lh, rh]}} -> {:>=, env, [(quote do: unquote(lh) - unquote(rh)), 0]}
+
+      {:ok, {:"=>", _, [lh, rh]}} when is_integer(rh) or is_float(rh) -> {:>=, env, [lh, rh]}
+      {:ok, {:"=>", _, [lh, rh]}} -> {:>=, env, [(quote do: unquote(lh) - unquote(rh)), 0]}
+
       {:ok, {:<, _, [lh, rh]}} when is_integer(rh) or is_float(rh) -> {:<, env, [lh, rh]}
       {:ok, {:<, _, [lh, rh]}} -> {:<, env, [(quote do: unquote(lh) - unquote(rh)), 0]}
 
+      {:ok, {:<=, _, [lh, rh]}} when is_integer(rh) or is_float(rh) -> {:<=, env, [lh, rh]}
+      {:ok, {:<=, _, [lh, rh]}} -> {:<=, env, [(quote do: unquote(lh) - unquote(rh)), 0]}
+
+      {:ok, {:"=<", _, [lh, rh]}} when is_integer(rh) or is_float(rh) -> {:<=, env, [lh, rh]}
+      {:ok, {:"=<", _, [lh, rh]}} -> {:<=, env, [(quote do: unquote(lh) - unquote(rh)), 0]}
+
       {:ok, {:=, _, [lh, rh]}} when is_integer(rh) or is_float(rh) or is_binary(rh) or is_boolean(rh) or is_nil(rh) -> {:==, env, [lh, rh]}
       {:ok, {:=, _, [lh, rh]}} -> {:==, lh - rh}
+
+      {:ok, {:==, _, [lh, rh]}} when is_integer(rh) or is_float(rh) or is_binary(rh) or is_boolean(rh) or is_nil(rh) -> {:==, env, [lh, rh]}
+      {:ok, {:==, _, [lh, rh]}} -> {:==, lh - rh}
 
       {:ok, {op, _, _}} -> raise(Formulae.SyntaxError, formula: input, error: {:operation, double_quote(op)})
       {:error, {1, message, op}} -> raise(Formulae.SyntaxError, formula: input, error: {:parsing,  message <> double_quote(op)})
