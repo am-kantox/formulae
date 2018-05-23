@@ -97,8 +97,6 @@ defmodule Formulae do
     curry(unit(input), binding, opts)
   end
 
-  @binding_finder ~r|undefined function (\w+)/0|
-
   @doc ~S"""
   Guesses the binding this formula requires.
   FIXME: probably, more sophisticated way would be to analyze Macro.traverse
@@ -110,24 +108,46 @@ defmodule Formulae do
 
       iex> ":math.sin(a / (3.14 * b)) > c" |> Formulae.bindings?
       ~w|a b c|a
+
+      iex> "a + b * 4 - :math.pow(c, 2) / d > 1.0 * e" |> Formulae.bindings?
+      ~w|a b c d e|a
   """
-  def bindings?(string, bindings \\ []) do
-    try do
-      Formulae.evaluate(string, bindings)
-      bindings |> Keyword.keys
-    rescue
-      e in Formulae.RunnerError ->
-        case e.error do
-          {:compile, message} ->
-            neu = @binding_finder
-                    |> Regex.run(message, capture: :all_but_first)
-                    |> Enum.map(fn e -> {String.to_atom(e), 1} end)
-            bindings?(string, bindings ++ neu)
-          _ ->
-            raise(e)
-        end
-    end
+  def bindings?(formula, bindings \\ []) do
+    formula
+    |> Iteraptor.AST.reduce([], fn {var, _, _}, acc ->
+         if is_nil(bindings[var]), do: [var | acc], else: acc
+       end)
+    |> Enum.reverse()
   end
+
+  def bindings?(formula, bindings) when is_binary(formula) do
+    with {:ok, quoted} <- Code.string_to_quoted(formula),
+      do: bindings?(quoted, bindings)
+  end
+
+  def bindings?(formula, bindings) when is_list(formula) do
+    Enum.flat_map(formula, &bindings?(&1, bindings))
+  end
+
+  def bindings?({var, _, nil}, bindings) when is_atom(var),
+    do: if is_nil(bindings[var]), do: [var], else: []
+
+  def bindings?({_inequality_sign, _, ast}, bindings) do
+    Iteraptor.reduce(ast, [], fn
+      {_, {_var, _, val}}, acc when is_list(val) ->
+        acc ++ bindings?(val, bindings)
+      {_, {var, _, _val}}, acc when is_atom(var) ->
+        if is_nil(bindings[var]) do
+          acc ++ [var]
+        else
+          acc
+        end
+      _, acc ->
+        acc
+    end)
+  end
+
+  def bindings?(_, _bindings), do: []
 
   ##############################################################################
 
@@ -167,7 +187,7 @@ defmodule Formulae do
       iex> Formulae.unit("3 > A + 2")
       {:>, [],
         [{:-, [context: Formulae, import: Kernel],
-          [3, {:+, [line: 1], [{:__aliases__, [counter: 0, line: 1], [:A]}, 2]}]}, 0]}
+          [3, {:+, [line: 1], [{:__aliases__, [line: 1], [:A]}, 2]}]}, 0]}
 
       iex> Formulae.unit("3 >= a + 2")
       {:>=, [],
@@ -181,7 +201,7 @@ defmodule Formulae do
       {:==, [], [{:+, [line: 1], [{:a, [line: 1], nil}, 2]}, 3]}
 
       iex> Formulae.unit(~S|A = "3"|)
-      {:==, [], [{:__aliases__, [counter: 0, line: 1], [:A]}, "3"]}
+      {:==, [], [{:__aliases__, [line: 1], [:A]}, "3"]}
   """
   def unit(input, env \\ []) when is_binary(input) do
     case Code.string_to_quoted(input) do #  |> String.downcase
