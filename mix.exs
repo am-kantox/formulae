@@ -1,10 +1,13 @@
 defmodule Formulae.Mixfile do
   use Mix.Project
 
+  @app :formulae
+  @ver "0.4.0"
+
   def project do
-    [app: :formulae,
-     version: version(),
-     elixir: "~> 1.3",
+    [app: @app,
+     version: @ver,
+     elixir: "~> 1.4",
      build_embedded: Mix.env == :prod,
      start_permanent: Mix.env == :prod,
      description: description(),
@@ -19,20 +22,11 @@ defmodule Formulae.Mixfile do
     [applications: [:logger]]
   end
 
-  def version do
-    File.read!(Path.join("config", "VERSION")) |> String.trim
-  end
-
-  #   {:mydep, "~> 0.3.0"}
-  #   {:mydep, git: "https://github.com/elixir-lang/mydep.git", tag: "0.1.0"}
-  #
-  # Type "mix help deps" for more examples and options
   defp deps do
     [
-      {:issuer, "~> 0.1"},
-      {:ex_ncurses, git: "https://github.com/jfreeze/ex_ncurses.git", only: [:dev, :test]},
+      {:iteraptor, "~> 1.2"},
 
-      {:credo, "~> 0.4", only: [:dev]},
+      {:credo, "~> 0.9", only: [:dev]},
       {:ex_doc, "~> 0.11", only: :dev}
     ]
   end
@@ -45,7 +39,7 @@ defmodule Formulae.Mixfile do
 
   defp package do
     [ # These are the default files included in the package
-     name: :formulae,
+     name: @app,
      files: ["lib", "config", "mix.exs", "README*"],
      maintainers: ["Aleksei Matiushkin"],
      licenses: ["MIT"],
