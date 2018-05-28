@@ -1,5 +1,4 @@
 defmodule Formulae do
-
   @moduledoc ~S"""
   A set of functions to deal with analytical formulae.
   """
@@ -65,7 +64,7 @@ defmodule Formulae do
   """
   def normalize(input) when is_binary(input) do
     with {normalized, {operation, _env, [formula, value]}} <- unit(input),
-          bindings <- bindings?(formula) do
+         bindings <- bindings?(formula) do
       {normalized, {operation, formula, value}, bindings}
     else
       _ -> raise(Formulae.SyntaxError, formula: input, error: {:unknown, inspect(input)})
@@ -83,13 +82,15 @@ defmodule Formulae do
       "7 - foo * 4 > 3.14 / 3.14"
   """
   def curry(input, binding \\ [], opts \\ [])
-    when is_tuple(input) or is_binary(input) do
-    fun =
-      fn
-        {var, meta, val} when is_atom(val) ->
-          if binding[var], do: binding[var], else: {var, meta, val}
-        any -> any
-      end
+      when is_tuple(input) or is_binary(input) do
+    fun = fn
+      {var, meta, val} when is_atom(val) ->
+        if binding[var], do: binding[var], else: {var, meta, val}
+
+      any ->
+        any
+    end
+
     Iteraptor.AST.map(input, fun, opts)
   end
 
@@ -118,8 +119,8 @@ defmodule Formulae do
   def bindings?(formula, bindings) do
     formula
     |> Iteraptor.AST.reduce([], fn {var, _, _}, acc ->
-         if is_nil(bindings[var]), do: [var | acc], else: acc
-       end)
+      if is_nil(bindings[var]), do: [var | acc], else: acc
+    end)
     |> Enum.reverse()
   end
 
@@ -169,27 +170,52 @@ defmodule Formulae do
   """
   def unit(input, env \\ []) when is_binary(input) do
     normalized = String.downcase(input)
+
     {
       normalized,
       case Code.string_to_quoted(normalized) do
-        {:ok, {:>, _, [lh, rh]}} when is_integer(rh) or is_float(rh) -> {:>, env, [lh, rh]}
-        {:ok, {:>, _, [lh, rh]}} -> {:>, env, [(quote do: unquote(lh) - unquote(rh)), 0]}
+        {:ok, {:>, _, [lh, rh]}} when is_integer(rh) or is_float(rh) ->
+          {:>, env, [lh, rh]}
 
-        {:ok, {:>=, _, [lh, rh]}} when is_integer(rh) or is_float(rh) -> {:>=, env, [lh, rh]}
-        {:ok, {:>=, _, [lh, rh]}} -> {:>=, env, [(quote do: unquote(lh) - unquote(rh)), 0]}
+        {:ok, {:>, _, [lh, rh]}} ->
+          {:>, env, [quote(do: unquote(lh) - unquote(rh)), 0]}
 
-        {:ok, {:<, _, [lh, rh]}} when is_integer(rh) or is_float(rh) -> {:<, env, [lh, rh]}
-        {:ok, {:<, _, [lh, rh]}} -> {:<, env, [(quote do: unquote(lh) - unquote(rh)), 0]}
+        {:ok, {:>=, _, [lh, rh]}} when is_integer(rh) or is_float(rh) ->
+          {:>=, env, [lh, rh]}
 
-        {:ok, {:<=, _, [lh, rh]}} when is_integer(rh) or is_float(rh) -> {:<=, env, [lh, rh]}
-        {:ok, {:<=, _, [lh, rh]}} -> {:<=, env, [(quote do: unquote(lh) - unquote(rh)), 0]}
+        {:ok, {:>=, _, [lh, rh]}} ->
+          {:>=, env, [quote(do: unquote(lh) - unquote(rh)), 0]}
 
-        {:ok, {:=, _, [lh, rh]}} -> {:==, env, [lh, rh]}
-        {:ok, {:==, _, [lh, rh]}} -> {:==, env, [lh, rh]}
+        {:ok, {:<, _, [lh, rh]}} when is_integer(rh) or is_float(rh) ->
+          {:<, env, [lh, rh]}
 
-        {:ok, {op, _, _}} -> raise(Formulae.SyntaxError, formula: input, error: {:operation, double_quote(op)})
-        {:error, {1, message, op}} -> raise(Formulae.SyntaxError, formula: input, error: {:parsing,  message <> double_quote(op)})
-        other -> raise(Formulae.SyntaxError, formula: input, error: {:unknown, inspect(other)})
+        {:ok, {:<, _, [lh, rh]}} ->
+          {:<, env, [quote(do: unquote(lh) - unquote(rh)), 0]}
+
+        {:ok, {:<=, _, [lh, rh]}} when is_integer(rh) or is_float(rh) ->
+          {:<=, env, [lh, rh]}
+
+        {:ok, {:<=, _, [lh, rh]}} ->
+          {:<=, env, [quote(do: unquote(lh) - unquote(rh)), 0]}
+
+        {:ok, {:=, _, [lh, rh]}} ->
+          {:==, env, [lh, rh]}
+
+        {:ok, {:==, _, [lh, rh]}} ->
+          {:==, env, [lh, rh]}
+
+        {:ok, {op, _, _}} ->
+          raise(Formulae.SyntaxError, formula: input, error: {:operation, double_quote(op)})
+
+        {:error, {1, message, op}} ->
+          raise(
+            Formulae.SyntaxError,
+            formula: input,
+            error: {:parsing, message <> double_quote(op)}
+          )
+
+        other ->
+          raise(Formulae.SyntaxError, formula: input, error: {:unknown, inspect(other)})
       end
     }
   end
@@ -248,25 +274,32 @@ defmodule Formulae do
 
   def evaluate(input, binding, opts) when is_tuple(input) do
     unresolved = bindings?(input, binding)
+
     if Enum.empty?(unresolved) do
       do_evaluate(input, binding, opts)
     else
-      raise(Formulae.RunnerError, formula: input,
-        error: {:compile, "incomplete binding to evaluate a formula, lacking: #{inspect unresolved}"})
+      raise(
+        Formulae.RunnerError,
+        formula: input,
+        error:
+          {:compile, "incomplete binding to evaluate a formula, lacking: #{inspect(unresolved)}"}
+      )
     end
   end
 
   defp do_evaluate(input, binding, opts) when is_tuple(input) do
     # FIXME Make `nil` acceptable through SQL-like `IS NULL` syntax!
     binding = Enum.reject(binding, fn {_, v} -> is_nil(v) end)
+
     try do
       case Code.eval_quoted(input, binding, opts) do
         {false, ^binding} -> false
-        {true,  ^binding} -> true
-        other             -> raise(Formulae.RunnerError, formula: input, error: {:weird, inspect(other)})
+        {true, ^binding} -> true
+        other -> raise(Formulae.RunnerError, formula: input, error: {:weird, inspect(other)})
       end
     rescue
-      e in CompileError -> raise(Formulae.RunnerError, formula: input, error: {:compile, e.description})
+      e in CompileError ->
+        raise(Formulae.RunnerError, formula: input, error: {:compile, e.description})
     end
   end
 

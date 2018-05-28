@@ -6,5 +6,4 @@ defmodule Formulae.SyntaxError do
     message = "Formula [#{value[:formula]}] syntax is incorrect (#{what}): #{how}."
     %Formulae.SyntaxError{formula: value[:formula], message: message}
   end
-
 end

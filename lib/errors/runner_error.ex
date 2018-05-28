@@ -6,5 +6,4 @@ defmodule Formulae.RunnerError do
     message = "Formula failed to run (#{what}): #{how}."
     %Formulae.RunnerError{formula: value[:formula], message: message, error: value[:error]}
   end
-
 end
