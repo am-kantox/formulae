@@ -3,6 +3,63 @@ defmodule Formulae do
   A set of functions to deal with analytical formulae.
   """
 
+  @type t :: %{__struct__: atom(), itself: binary(), ast: nil | tuple(), module: atom()}
+  defstruct itself: nil, ast: nil, module: nil, variables: []
+
+  @doc "Returns whether the formula was already compiled into module"
+  @spec compiled?(Formulae.t()) :: boolean()
+  def compiled?(%Formulae{module: nil}), do: false
+  def compiled?(%Formulae{module: _}), do: true
+
+  @doc "Compiles the formula into module"
+  @spec compile(Formulae.t() | binary()) :: boolean()
+  def compile(input) when is_binary(input) do
+    Formulae
+    |> Module.concat(input)
+    |> Code.ensure_loaded()
+    |> maybe_create_module(input)
+  end
+
+  def compile(%Formulae{itself: input} = f), do: compile(input)
+
+  @spec maybe_create_module({:module, atom()} | {:error, any()}, input :: binary()) ::
+          Formulae.t()
+  defp maybe_create_module({:module, module}, input),
+    do: %Formulae{itself: input, module: module, ast: module.ast(), variables: module.variables()}
+
+  defp maybe_create_module({:error, _}, input) do
+    with {:ok, macro} <- Code.string_to_quoted(input),
+         {^macro, variables} =
+           Macro.prewalk(macro, [], fn
+             {var, _, nil} = v, acc -> {v, [var | acc]}
+             v, acc -> {v, acc}
+           end),
+         len = length(variables),
+         macro = Macro.escape(macro),
+         #! FIXME add all permutations
+         vars = Enum.map(variables, &{&1, Macro.var(&1, nil)}),
+         IO.inspect(vars, label: "VARS"),
+         # vars = apply(Combinations, :"do_#{len}", [vars]),
+         ast = [
+           quote generated: true do
+             defmacrop do_eval(unquote(vars)), do: unquote(macro)
+             # defmacrop do_eval(other), do: IO.inspect({unquote(vars), other}, label: "EVAL")
+
+             def ast, do: unquote(macro)
+             def variables, do: unquote(variables)
+             def eval(unquote(vars)), do: do_eval(unquote(vars))
+           end
+           #  | Enum.map(vars, fn var ->
+           #      IO.inspect(var)
+           #      quote generated: true do
+           #        def eval(unquote(var)), do: do_eval(unquote(var))
+           #      end
+           #    end)
+         ],
+         {:module, module, _, _} <- Module.create(Module.concat(Formulae, input), ast, __ENV__),
+         do: %Formulae{itself: input, ast: macro, module: module, variables: variables}
+  end
+
   ##############################################################################
 
   @doc ~S"""
