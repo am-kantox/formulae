@@ -3,17 +3,57 @@ defmodule Formulae do
   A set of functions to deal with analytical formulae.
   """
 
-  @eval_in_place Application.get_env(:formulae, :eval_in_place, false)
+  # @eval_in_place Application.get_env(:formulae, :eval_in_place, false)
 
-  @type t :: %{__struct__: atom(), itself: binary(), ast: nil | tuple(), module: atom()}
-  defstruct itself: nil, ast: nil, module: nil, eval: nil, variables: []
+  @type t :: %{
+          __struct__: atom(),
+          formula: binary(),
+          ast: nil | tuple(),
+          module: nil | atom(),
+          variables: nil | [atom()],
+          eval: nil | (keyword() -> any())
+        }
+  defstruct formula: nil, ast: nil, module: nil, eval: nil, variables: nil
 
-  @doc "Returns whether the formula was already compiled into module"
-  @spec compiled?(Formulae.t()) :: boolean()
+  @doc """
+  Checks whether the formula was already compiled into module.
+
+  _Examples:_
+
+      iex> Formulae.compiled?("foo > 42")
+      false
+      iex> Formulae.compile("foo > 42")
+      iex> Formulae.compiled?("foo > 42")
+      true
+  """
+  @spec compiled?(binary() | Formulae.t()) :: boolean()
+  def compiled?(input) when is_binary(input),
+    do: Formulae |> Module.concat(input) |> Code.ensure_loaded?()
+
   def compiled?(%Formulae{module: nil}), do: false
   def compiled?(%Formulae{module: _}), do: true
 
-  @doc "Compiles the formula into module"
+  @doc """
+  Compiles the formula into module.
+
+  _Examples:_
+
+      iex> f = Formulae.compile("rem(a, 5) - b == 0")
+      iex> f.formula
+      "rem(a, 5) - b == 0"
+      iex> f.variables
+      [:a, :b]
+      iex> f.module
+      :"Elixir.Formulae.rem(a, 5) - b == 0"
+      iex> f.module.eval(a: 12, b: 2)
+      true
+
+      iex> f = Formulae.compile("rem(a, 5) - b == 0")
+      iex> f.eval.(a: 11, b: 1)
+      true
+      iex> f.eval.(a: 12, b: 1)
+      false
+  """
   @spec compile(Formulae.t() | binary()) :: boolean()
   def compile(input) when is_binary(input) do
     Formulae
@@ -22,13 +62,13 @@ defmodule Formulae do
     |> maybe_create_module(input)
   end
 
-  def compile(%Formulae{itself: input}), do: compile(input)
+  def compile(%Formulae{formula: input}), do: compile(input)
 
   @spec maybe_create_module({:module, atom()} | {:error, any()}, input :: binary()) ::
           Formulae.t()
   defp maybe_create_module({:module, module}, input),
     do: %Formulae{
-      itself: input,
+      formula: input,
       module: module,
       ast: module.ast(),
       variables: module.variables(),
@@ -46,7 +86,7 @@ defmodule Formulae do
          len = length(variables),
          macro = Macro.escape(macro),
          vars = Enum.map(variables, &{&1, Macro.var(&1, nil)}),
-         vars = apply(Combinations, :"do_#{len}", [vars]),
+         vars = apply(NonRepeatedPermutations, :"do_#{len}", [vars]),
          ast = [
            quote generated: true do
              def ast, do: unquote(macro)
@@ -55,17 +95,28 @@ defmodule Formulae do
              def eval(args),
                do: {:error, {:invalid_arguments, [given: args, expected: unquote(variables)]}}
            end
-           | Enum.map(vars, fn var ->
-               quote generated: true do
-                 defmacrop do_eval(unquote(var)), do: {unquote(macro), unquote(var)}
-                 def eval(unquote(var)), do: unquote(var) |> do_eval() |> elem(0)
-               end
-             end)
+           | case vars do
+               [] ->
+                 [
+                   quote generated: true do
+                     defmacrop do_eval([]), do: {unquote(macro), []}
+                     def eval([]), do: [] |> do_eval() |> elem(0)
+                   end
+                 ]
+
+               [_ | _] ->
+                 Enum.map(vars, fn var ->
+                   quote generated: true do
+                     defmacrop do_eval(unquote(var)), do: {unquote(macro), unquote(var)}
+                     def eval(unquote(var)), do: unquote(var) |> do_eval() |> elem(0)
+                   end
+                 end)
+             end
          ],
          {:module, module, _, _} <-
            Module.create(Module.concat(Formulae, input), Enum.reverse(ast), __ENV__),
          do: %Formulae{
-           itself: input,
+           formula: input,
            ast: macro,
            module: module,
            variables: variables,
@@ -75,8 +126,12 @@ defmodule Formulae do
 
   ##############################################################################
 
+  @doc deprecated: "Use `Formulae.eval/2` instead"
+
   @doc ~S"""
-  Revalidates the formula with bindings given.
+  Revalidates the formula with bindings given. Returns true if the formula
+  strictly evaluates to `true`, `false` otherwise. Compiles the formula
+  before evaluation if needed.
 
   ## Examples
 
@@ -108,10 +163,9 @@ defmodule Formulae do
       false
   """
   def check(string, bindings \\ []) do
-    try do
-      Formulae.evaluate(string, bindings)
-    rescue
-      Formulae.RunnerError -> false
+    case Formulae.compile(string).eval.(bindings) do
+      true -> true
+      _ -> false
     end
   end
 

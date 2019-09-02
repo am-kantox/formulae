@@ -4,7 +4,7 @@ defmodule Permutations do
 
   The maximal allowed number of permutations is limited to 12.
   """
-  Enum.each(1..12, fn n ->
+  Enum.each(2..12, fn n ->
     @n n
     defmacrop unquote(:"do_#{@n}!")(l) do
       clause = fn i -> {:<-, [], [{:"i#{i}", [], Elixir}, l]} end
@@ -16,7 +16,22 @@ defmodule Permutations do
     end
   end)
 
-  Enum.each(1..12, fn n ->
+  @doc "Calculates all permutations of an empty list, returning an empty list"
+  @spec do_0 :: []
+  def do_0(), do: []
+
+  @doc "Calculates all permutations of an empty list, returning an empty list"
+  @spec do_0([]) :: []
+  def do_0([]), do: []
+
+  @doc """
+  Calculates all permutations of a list having a single keyword element,
+  returning the keyword wrapped into a list.
+  """
+  @spec do_1(kw :: keyword()) :: [keyword()]
+  def do_1(kw), do: [kw]
+
+  Enum.each(2..12, fn n ->
     @n n
     @doc "Calculates the permutations of `#{n}` for the list given"
     def unquote(:"do_#{@n}")(list),
