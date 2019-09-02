@@ -26,8 +26,7 @@ defmodule Formulae.Mixfile do
 
   defp deps do
     [
-      {:iteraptor, "~> 1.2"},
-      {:credo, "~> 0.9", only: [:dev]},
+      {:credo, "~> 1.0", only: :dev},
       {:ex_doc, "~> 0.11", only: :dev}
     ]
   end
