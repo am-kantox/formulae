@@ -1,27 +1,38 @@
 # Formulae
 
-**TODO: Add description**
+**Nifty precompiled formulae handling**
 
 ## Installation
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed as:
+```elixir
+def deps do
+  [{:formulae, "~> 0.5"}]
+end
+```
 
-  1. Add `formulae` to your list of dependencies in `mix.exs`:
+## Using
 
-    ```elixir
-    def deps do
-      [{:formulae, "~> 0.3.2"}]
-    end
-    ```
+```elixir
+iex|1 ▶ f = Formulae.compile("rem(a, 5) - b == 0")
+%Formulae{
+  ast: {:==, [line: 1],
+   [
+     {:-, [line: 1],
+      [{:rem, [line: 1], [{:a, [line: 1], nil}, 5]}, {:b, [line: 1], nil}]},
+     0
+   ]},
+  eval: &:"Elixir.Formulae.rem(a, 5) - b == 0".eval/1,
+  formula: "rem(a, 5) - b == 0",
+  module: :"Elixir.Formulae.rem(a, 5) - b == 0",
+  variables: [:a, :b]
+}
+iex|2 ▶ f.eval.(a: 11, b: 1)
+true
+iex|3 ▶ f.variables
+[:a, :b]
+iex|4 ▶ f.module
+:"Elixir.Formulae.rem(a, 5) - b == 0"
+```
 
-  2. Ensure `formulae` is started before your application:
-
-    ```elixir
-    def application do
-      [applications: [:formulae]]
-    end
-    ```
-
-If [published on HexDocs](https://hex.pm/docs/tasks#hex_docs), the docs can
-be found at [https://hexdocs.pm/formulae](https://hexdocs.pm/formulae)
+## [Documentation](https://hexdocs.pm/formulae)
 
