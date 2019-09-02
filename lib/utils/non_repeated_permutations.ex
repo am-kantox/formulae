@@ -34,11 +34,15 @@ defmodule NonRepeatedPermutations do
     end
 
     defp filter(permutation, len) when is_list(permutation) do
-      permutation
-      |> Keyword.keys()
-      |> Enum.uniq()
-      |> length()
-      |> Kernel.==(len)
+      if Keyword.keyword?(permutation) do
+        permutation
+        |> Keyword.keys()
+        |> Enum.uniq()
+        |> length()
+        |> Kernel.==(len)
+      else
+        filter(Enum.flat_map(permutation, & &1), len)
+      end
     end
   end)
 end

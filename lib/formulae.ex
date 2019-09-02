@@ -16,6 +16,22 @@ defmodule Formulae do
   defstruct formula: nil, ast: nil, module: nil, eval: nil, variables: nil
 
   @doc """
+  Evaluates the formula returning the result back.
+
+  _Examples:_
+
+      iex> Formulae.eval("rem(a, 5) + rem(b, 4) == 0", a: 20, b: 20)
+      true
+      iex> Formulae.eval("rem(a, 5) == 0", a: 21)
+      false
+      iex> Formulae.eval("rem(a, 5) + rem(b, 4)", a: 21, b: 22)
+      3
+  """
+  @spec eval(string :: binary(), bindings :: keyword()) :: term()
+  def eval(string, bindings \\ []),
+    do: with(f <- Formulae.compile(string), do: f.eval.(bindings))
+
+  @doc """
   Checks whether the formula was already compiled into module.
 
   _Examples:_
@@ -54,7 +70,7 @@ defmodule Formulae do
       iex> f.eval.(a: 12, b: 1)
       false
   """
-  @spec compile(Formulae.t() | binary()) :: boolean()
+  @spec compile(Formulae.t() | binary()) :: Formulae.t()
   def compile(input) when is_binary(input) do
     Formulae
     |> Module.concat(input)
@@ -82,39 +98,28 @@ defmodule Formulae do
              {var, _, nil} = v, acc -> {v, [var | acc]}
              v, acc -> {v, acc}
            end),
+         escaped = Macro.escape(macro),
          variables = Enum.reverse(variables),
-         len = length(variables),
-         macro = Macro.escape(macro),
          vars = Enum.map(variables, &{&1, Macro.var(&1, nil)}),
-         vars = apply(NonRepeatedPermutations, :"do_#{len}", [vars]),
-         ast = [
-           quote generated: true do
-             def ast, do: unquote(macro)
-             def variables, do: unquote(variables)
+         ast =
+           (quote generated: true do
+              @variables unquote(variables)
 
-             def eval(args),
-               do: {:error, {:invalid_arguments, [given: args, expected: unquote(variables)]}}
-           end
-           | case vars do
-               [] ->
-                 [
-                   quote generated: true do
-                     defmacrop do_eval([]), do: {unquote(macro), []}
-                     def eval([]), do: [] |> do_eval() |> elem(0)
-                   end
-                 ]
+              def ast, do: unquote(escaped)
+              def variables, do: @variables
 
-               [_ | _] ->
-                 Enum.map(vars, fn var ->
-                   quote generated: true do
-                     defmacrop do_eval(unquote(var)), do: {unquote(macro), unquote(var)}
-                     def eval(unquote(var)), do: unquote(var) |> do_eval() |> elem(0)
-                   end
-                 end)
-             end
-         ],
+              defmacrop do_eval(unquote(vars)), do: {unquote(escaped), unquote(vars)}
+              def eval(unquote(vars)), do: unquote(vars) |> do_eval() |> elem(0)
+
+              def eval(%{} = binding),
+                do: eval(for k <- @variables, do: {k, Map.get(binding, k)})
+
+              def eval(args),
+                do:
+                  {:error, {:invalid_arguments, [given: args, expected_keys: unquote(variables)]}}
+            end),
          {:module, module, _, _} <-
-           Module.create(Module.concat(Formulae, input), Enum.reverse(ast), __ENV__),
+           Module.create(Module.concat(Formulae, input), ast, __ENV__),
          do: %Formulae{
            formula: input,
            ast: macro,
@@ -132,59 +137,20 @@ defmodule Formulae do
   Revalidates the formula with bindings given. Returns true if the formula
   strictly evaluates to `true`, `false` otherwise. Compiles the formula
   before evaluation if needed.
-
-  ## Examples
-
-      iex> "a > 5" |> Formulae.check([a: 6])
-      true
-
-      iex> "a > 5" |> Formulae.check([a: 5])
-      false
-
-      iex> "a > 5" |> Formulae.check([a: 3])
-      false
-
-      iex> "a < 5" |> Formulae.check([b: 42])
-      false
-
-      iex> "a > 5" |> Formulae.check([a: nil])
-      false
-
-      iex> "a < 5" |> Formulae.check([{:a, nil}])
-      false
-
-      iex> "a > 5" |> Formulae.check([{:a, 6}])
-      true
-
-      iex> "a > 5" |> Formulae.check([{:a, 5}])
-      false
-
-      iex> "a > 5" |> Formulae.check
-      false
   """
+  @spec check(string :: binary(), bindings :: keyword()) :: boolean()
   def check(string, bindings \\ []) do
-    case Formulae.compile(string).eval.(bindings) do
-      true -> true
-      _ -> false
+    try do
+      Formulae.evaluate(string, bindings)
+    rescue
+      Formulae.RunnerError -> false
     end
   end
 
+  @doc deprecated: "Use `Formulae.compile/1` and `%Formulae{}.variables` instead"
+
   @doc ~S"""
   Returns a normalized representation for the formula given.
-
-  ## Example
-
-      iex> {_, {:>, _, 0}, bindings} = "(temp - time * 4) > speed / 3.14" |> Formulae.normalize
-      ...> bindings
-      [:temp, :time, :speed]
-
-      iex> {_, {:<, _, 3.14}, bindings} = "hello < 3.14" |> Formulae.normalize
-      ...> bindings
-      [:hello]
-
-      iex> {_, {:<, _, 3.14}, bindings} = "HELLO < 3.14" |> Formulae.normalize
-      ...> bindings
-      [:hello]
   """
   def normalize(input) when is_binary(input) do
     with {normalized, {operation, _env, [formula, value]}} <- unit(input),
@@ -195,32 +161,55 @@ defmodule Formulae do
     end
   end
 
+  @spec ast_and_variables(input :: binary() | Formulae.t(), binding :: keyword()) ::
+          {tuple(), keyword()}
+  defp ast_and_variables(input, binding) when is_binary(input) do
+    input
+    |> Formulae.compile()
+    |> ast_and_variables(binding)
+  end
+
+  defp ast_and_variables(%Formulae{ast: nil, formula: input}, binding),
+    do: ast_and_variables(input, binding)
+
+  defp ast_and_variables(%Formulae{ast: ast}, binding) do
+    {ast, vars} =
+      Macro.prewalk(ast, [], fn
+        {var, _, nil} = v, acc when is_atom(var) ->
+          if binding[var], do: {binding[var], acc}, else: {v, [var | acc]}
+
+        v, acc ->
+          {v, acc}
+      end)
+
+    {ast, Enum.reverse(vars)}
+  end
+
   @doc ~S"""
   Curries the formula by substituting the known bindings into it.
 
   ## Example
 
-      iex> "(temp - foo * 4) > speed / 3.14"
-      ...> |> Formulae.curry(temp: 7, speed: 3.14)
-      ...> |> Macro.to_string()
+      iex> Formulae.curry("(temp - foo * 4) > speed / 3.14", temp: 7, speed: 3.14).formula
       "7 - foo * 4 > 3.14 / 3.14"
   """
+  @spec curry(input :: Formulae.t() | binary(), binding :: keyword(), opts :: keyword()) ::
+          Formulae.t()
   def curry(input, binding \\ [], opts \\ [])
-      when is_tuple(input) or is_binary(input) do
-    fun = fn
-      {var, meta, val} when is_atom(val) ->
-        if binding[var], do: binding[var], else: {var, meta, val}
 
-      any ->
-        any
-    end
-
-    Iteraptor.AST.map(input, fun, opts)
+  def curry(input, binding, _opts) when is_binary(input) do
+    {ast, vars} = ast_and_variables(input, binding)
+    %Formulae{variables: ^vars} = Formulae.compile(Macro.to_string(ast))
   end
 
+  def curry(%Formulae{formula: formula}, binding, opts) when is_binary(formula),
+    do: curry(formula, binding, opts)
+
+  @doc deprecated:
+         "Use `Formulae.compile/1` and `%Formulae{}.variables` or `Formula.curry/2` instead"
+
   @doc ~S"""
-  Guesses the binding this formula requires.
-  FIXME: probably, more sophisticated way would be to analyze Macro.traverse
+  Returns the binding this formula requires.
 
   ## Examples
 
@@ -233,20 +222,17 @@ defmodule Formulae do
       iex> "a + b * 4 - :math.pow(c, 2) / d > 1.0 * e" |> Formulae.bindings?
       ~w|a b c d e|a
   """
+  @spec bindings?(formula :: Formulae.t() | binary(), binding :: keyword()) :: keyword()
   def bindings?(formula, bindings \\ [])
 
-  def bindings?(formula, bindings) when is_binary(formula) do
-    with {:ok, ast} = Code.string_to_quoted(formula),
-      do: bindings?(ast, bindings)
-  end
+  def bindings?(formula, bindings) when is_binary(formula),
+    do: with(f <- Formulae.curry(formula, bindings), do: f.variables)
 
-  def bindings?(formula, bindings) do
-    formula
-    |> Iteraptor.AST.reduce([], fn {var, _, _}, acc ->
-      if is_nil(bindings[var]), do: [var | acc], else: acc
-    end)
-    |> Enum.reverse()
-  end
+  def bindings?(formula, bindings) when is_tuple(formula),
+    do: bindings?(Macro.to_string(formula), bindings)
+
+  def bindings?(%Formulae{formula: formula}, bindings),
+    do: bindings?(formula, bindings)
 
   ##############################################################################
 
@@ -255,13 +241,13 @@ defmodule Formulae do
 
   ##############################################################################
 
+  @deprecated "Use `Formulae.eval/2` instead"
+
   @doc ~S"""
   Produces the normalized representation of formula. If the _rho_ is
   an instance of [`Integer`](http://elixir-lang.org/docs/stable/elixir/Integer.html#content)
   or [`Float`](http://elixir-lang.org/docs/stable/elixir/Float.html#content),
   it’s left intact, otherwise it’s moved to the left side with negation.
-
-  @todo Try to `eval` _rho_ before guards; premature optimization
 
   ## Examples
 
@@ -343,6 +329,8 @@ defmodule Formulae do
       end
     }
   end
+
+  @deprecated "Use `Formulae.eval/2` instead"
 
   @doc ~S"""
   Evaluates normalized representation of formula.
