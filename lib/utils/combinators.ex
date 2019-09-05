@@ -15,115 +15,128 @@ defmodule Formulae.Combinators do
        [:d, :a], [:d, :b], [:d, :c], [:d, :d]]
 
   """
-  @max_permutations Application.get_env(:formulae, :max_permutations, 20)
 
-  Enum.each(2..@max_permutations, fn n ->
-    @n n
-    # combination
-    # for {i1, i1_idx} <- Enum.with_index(l),
-    #     {i2, i2_idx} <- Enum.with_index(l),
-    #     {i3, i3_idx} <- Enum.with_index(l),
-    #     i2_idx > i1_idx,
-    #     i3_idx > i2_idx,
-    #     do: [i1, i2, i3]
-    defmacrop unquote(:"combinations_#{@n}")(l) do
-      var = fn i -> {:"i#{i}", [], Elixir} end
-      idx = fn i -> {:"i#{i}_idx", [], Elixir} end
+  import Combinators.H
 
-      clause = fn i ->
-        {:<-, [],
+  defmacro combinations(l, n) do
+    guards = mapper(n, 2, &{:>, [context: Elixir, import: Kernel], [idx(&1), idx(&1 - 1)]})
+
+    {:for, [],
+     Enum.reverse([
+       [do: mapper(1, n, &var/1)]
+       | guards ++ mapper(n, 1, &for_clause(&1, l))
+     ])}
+  end
+
+  defmacro permutations(l, n) do
+    guards =
+      n
+      |> mapper(1, &idx/1)
+      |> combinations(2)
+      |> Enum.map(&{:!=, [context: Elixir, import: Kernel], &1})
+
+    {:for, [],
+     Enum.reverse([
+       [do: mapper(1, n, &var/1)]
+       | guards ++ mapper(n, 1, &for_clause(&1, l))
+     ])}
+  end
+
+  defmacro repeated_permutations(l, n) do
+    clause = fn i -> {:<-, [], [var(i), l]} end
+    {:for, [], Enum.reverse([[do: mapper(1, n, &var/1)] | mapper(n, 1, clause)])}
+  end
+
+  # @doc "Calculates all combinations of the list, given as the first parameter"
+  # @spec combinations(list :: list(), count :: non_neg_integer()) :: [list()]
+  # def combinations([], _), do: []
+  # def combinations(list, n) when length(list) < n, do: []
+  # def combinations(list, n) when length(list) == n, do: [list]
+  # def combinations(list, 1), do: Enum.map(list, &[&1])
+  # def combinations(list, n), do: m_combinations(list, n)
+
+  # @doc "Calculates all permutations of the list, given as the first parameter"
+  # @spec permutations(list :: list(), count :: non_neg_integer()) :: [list()]
+  # def permutations([], _), do: []
+  # def permutations(list, n) when length(list) < n, do: []
+  # def permutations(list, 1), do: Enum.map(list, &[&1])
+  # def permutations(list, n), do: m_permutations(list, n)
+
+  # @doc "Calculates all repeated permutations of the list, given as the first parameter"
+  # @spec repeated_permutations(list :: list(), count :: non_neg_integer()) :: [list()]
+  # def repeated_permutations([], _), do: []
+  # def repeated_permutations(list, 1), do: Enum.map(list, &[&1])
+  # def repeated_permutations(list, n), do: m_repeated_permutations(list, n)
+
+  defmodule Stream do
+    @moduledoc """
+    Helper to calculate all the combinations / permutations of the list given.
+
+    Similar to `Formulae.Combinators` but returns a stream.
+
+    _Examples_
+
+        iex> ~w|a b c d|a
+        ...> |> Formulae.Combinators.Stream.combinations(2)
+        ...> |> elem(0)
+        ...> |> Enum.to_list()
+        [[:a, :b], [:a, :c], [:a, :d], [:b, :c], [:b, :d], [:c, :d]]
+        iex> ~w|a b c d|a
+        ...> |> Formulae.Combinators.Stream.permutations(2)
+        ...> |> elem(0)
+        ...> |> Enum.to_list()
+        [[:a, :b], [:a, :c], [:a, :d], [:b, :a], [:b, :c], [:b, :d],
+         [:c, :a], [:c, :b], [:c, :d], [:d, :a], [:d, :b], [:d, :c]]
+        iex> ~w|a b c d|a
+        ...> |> Formulae.Combinators.Stream.repeated_permutations(2)
+        ...> |> elem(0)
+        ...> |> Enum.to_list()
+        [[:a, :a], [:a, :b], [:a, :c], [:a, :d], [:b, :a], [:b, :b],
+         [:b, :c], [:b, :d], [:c, :a], [:c, :b], [:c, :c], [:c, :d],
+         [:d, :a], [:d, :b], [:d, :c], [:d, :d]]
+
+    """
+    import Combinators.H
+
+    defmacro combinations(l, n) do
+      stream_combinations_guard =
+        {:if, [context: Elixir, import: Kernel],
          [
-           {var.(i), idx.(i)},
-           {{:., [], [{:__aliases__, [alias: false], [:Enum]}, :with_index]}, [], [l]}
+           and_many(
+             mapper(n, 2, &{:>, [context: Elixir, import: Kernel], [idx(&1), idx(&1 - 1)]})
+           ),
+           [do: {[mapper(1, n, &var/1)], :ok}, else: {[], :ok}]
          ]}
-      end
 
-      guard = fn i -> {:>, [context: Elixir, import: Kernel], [idx.(i), idx.(i - 1)]} end
-
-      {:for, [],
-       Enum.reverse([
-         [do: Enum.map(1..@n, var)] | Enum.map(@n..2, guard) ++ Enum.map(@n..1, clause)
-       ])}
+      Enum.reduce(n..1, stream_combinations_guard, fn i, body ->
+        stream_transform_clause(i, l, body)
+      end)
     end
 
-    # # permutation
-    # for {i1, i1_idx} <- Enum.with_index(l),
-    #     {i2, i2_idx} <- Enum.with_index(l),
-    #     {i3, i3_idx} <- Enum.with_index(l),
-    #     i1_idx != i2_idx,
-    #     i1_idx != i3_idx,
-    #     i2_idx != i3_idx,
-    #     do: [i1, i2, i3]
-
-    defmacrop unquote(:"permutations_#{@n}")(l) do
-      var = fn i -> {:"i#{i}", [], nil} end
-      idx = fn i -> {:"i#{i}_idx", [], Elixir} end
-
-      clause = fn i ->
-        {:<-, [],
-         [
-           {var.(i), idx.(i)},
-           {{:., [], [{:__aliases__, [alias: false], [:Enum]}, :with_index]}, [], [l]}
-         ]}
-      end
-
+    defmacro permutations(l, n) do
       guards =
-        @n..1
-        |> Enum.map(idx)
-        |> combinations_2()
+        n
+        |> mapper(1, &idx/1)
+        |> combinations(2)
+        |> elem(0)
         |> Enum.map(&{:!=, [context: Elixir, import: Kernel], &1})
 
-      {:for, [],
-       Enum.reverse([
-         [do: Enum.map(1..@n, var)] | guards ++ Enum.map(@n..1, clause)
-       ])}
+      stream_permutations_guard =
+        {:if, [context: Elixir, import: Kernel],
+         [
+           and_many(guards),
+           [do: {[mapper(1, n, &var/1)], :ok}, else: {[], :ok}]
+         ]}
+
+      Enum.reduce(n..1, stream_permutations_guard, fn i, body ->
+        stream_transform_clause(i, l, body)
+      end)
     end
 
-    # # repeated permutation
-    # for i1 <- l,
-    #     i2 <- l,
-    #     i3 <- l,
-    #     do: [i1, i2, i3]
-    defmacrop unquote(:"repeated_permutations_#{@n}")(l) do
-      var = fn i -> {:"i#{i}", [], nil} end
-      clause = fn i -> {:<-, [], [var.(i), l]} end
-      {:for, [], Enum.reverse([[do: Enum.map(1..@n, var)] | Enum.map(@n..1, clause)])}
+    defmacro repeated_permutations(l, n) do
+      Enum.reduce(n..1, {[mapper(1, n, &var/1)], :ok}, fn i, body ->
+        stream_transform_clause(i, l, body)
+      end)
     end
-  end)
-
-  @doc "Calculates all combinations of the list, given as the first parameter"
-  @spec combinations(list :: list(), count :: non_neg_integer()) :: [list()]
-  def combinations([], _), do: []
-  def combinations(list, n) when length(list) < n, do: []
-  def combinations(list, n) when length(list) == n, do: [list]
-  def combinations(list, 1), do: Enum.map(list, &[&1])
-
-  Enum.each(2..@max_permutations, fn n ->
-    @n n
-    def combinations(list, unquote(@n)),
-      do: Enum.map(unquote(:"combinations_#{@n}")(list), & &1)
-  end)
-
-  @doc "Calculates all permutations of the list, given as the first parameter"
-  @spec permutations(list :: list(), count :: non_neg_integer()) :: [list()]
-  def permutations([], _), do: []
-  def permutations(list, n) when length(list) < n, do: []
-  def permutations(list, 1), do: Enum.map(list, &[&1])
-
-  Enum.each(2..@max_permutations, fn n ->
-    @n n
-    def permutations(list, unquote(@n)),
-      do: Enum.map(unquote(:"permutations_#{@n}")(list), & &1)
-  end)
-
-  @doc "Calculates all repeated permutations of the list, given as the first parameter"
-  @spec repeated_permutations(list :: list(), count :: non_neg_integer()) :: [list()]
-  def repeated_permutations([], _), do: []
-  def repeated_permutations(list, 1), do: Enum.map(list, &[&1])
-
-  Enum.each(2..@max_permutations, fn n ->
-    @n n
-    def repeated_permutations(list, unquote(@n)),
-      do: Enum.map(unquote(:"repeated_permutations_#{@n}")(list), & &1)
-  end)
+  end
 end
