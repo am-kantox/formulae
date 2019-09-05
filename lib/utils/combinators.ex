@@ -99,37 +99,14 @@ defmodule Formulae.Combinators do
     import Combinators.H
 
     defmacro combinations(l, n) do
-      stream_combinations_guard =
-        {:if, [context: Elixir, import: Kernel],
-         [
-           and_many(
-             mapper(n, 2, &{:>, [context: Elixir, import: Kernel], [idx(&1), idx(&1 - 1)]})
-           ),
-           [do: {[mapper(1, n, &var/1)], :ok}, else: {[], :ok}]
-         ]}
-
-      Enum.reduce(n..1, stream_combinations_guard, fn i, body ->
-        stream_transform_clause(i, l, body)
+      Enum.reduce(n..1, {[mapper(1, n, &var/1)], :ok}, fn i, body ->
+        stream_combination_transform_clause(i, l, body)
       end)
     end
 
     defmacro permutations(l, n) do
-      guards =
-        n
-        |> mapper(1, &idx/1)
-        |> combinations(2)
-        |> elem(0)
-        |> Enum.map(&{:!=, [context: Elixir, import: Kernel], &1})
-
-      stream_permutations_guard =
-        {:if, [context: Elixir, import: Kernel],
-         [
-           and_many(guards),
-           [do: {[mapper(1, n, &var/1)], :ok}, else: {[], :ok}]
-         ]}
-
-      Enum.reduce(n..1, stream_permutations_guard, fn i, body ->
-        stream_transform_clause(i, l, body)
+      Enum.reduce(n..1, {[mapper(1, n, &var/1)], :ok}, fn i, body ->
+        stream_permutation_transform_clause(i, l, body)
       end)
     end
 
