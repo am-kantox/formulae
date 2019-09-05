@@ -1,4 +1,4 @@
-defmodule Combinators.H do
+defmodule Formulae.Combinators.H do
   @moduledoc false
 
   def var(i), do: {:"i_#{i}", [], Elixir}
@@ -17,8 +17,8 @@ defmodule Combinators.H do
 
   def sink_permutation_clauses(i, body) when i > 1 do
     Enum.reverse([
-      {:->, [], [[{var(i), {:_, [], Elixir}}, :ok], body]}
-      | Enum.map(1..(i - 1), &sink_permutation_clause/1)
+      {:->, [], [[{var(i), idx(i)}, :ok], body]}
+      | Enum.map((i - 1)..1, &sink_permutation_clause/1)
     ])
   end
 

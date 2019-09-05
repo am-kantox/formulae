@@ -16,7 +16,7 @@ defmodule Formulae.Combinators do
 
   """
 
-  import Combinators.H
+  import Formulae.Combinators.H
 
   defmacro combinations(l, n) do
     guards = mapper(n, 2, &{:>, [context: Elixir, import: Kernel], [idx(&1), idx(&1 - 1)]})
@@ -95,8 +95,35 @@ defmodule Formulae.Combinators do
          [:b, :c], [:b, :d], [:c, :a], [:c, :b], [:c, :c], [:c, :d],
          [:d, :a], [:d, :b], [:d, :c], [:d, :d]]
 
+        iex> (for c <- ?a..?z, do: <<c>>)
+        ...> |> Formulae.Combinators.Stream.combinations(12)
+        ...> |> elem(0)
+        ...> |> Enum.take(5)
+        [["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l"],
+         ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "m"],
+         ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "n"],
+         ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "o"],
+         ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "p"]]
+        iex> (for c <- ?a..?z, do: <<c>>)
+        ...> |> Formulae.Combinators.Stream.permutations(12)
+        ...> |> elem(0)
+        ...> |> Enum.take(5)
+        [["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l"],
+         ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "m"],
+         ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "n"],
+         ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "o"],
+         ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "p"]]
+        iex> (for c <- ?a..?z, do: <<c>>)
+        ...> |> Formulae.Combinators.Stream.repeated_permutations(12)
+        ...> |> elem(0)
+        ...> |> Enum.take(5)
+        [["a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a"],
+         ["a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "b"],
+         ["a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "c"],
+         ["a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "d"],
+         ["a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "a", "e"]]
     """
-    import Combinators.H
+    import Formulae.Combinators.H
 
     defmacro combinations(l, n) do
       Enum.reduce(n..1, {[mapper(1, n, &var/1)], :ok}, fn i, body ->
