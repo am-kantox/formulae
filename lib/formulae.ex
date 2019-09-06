@@ -134,6 +134,23 @@ defmodule Formulae do
 
   def compile(%Formulae{formula: input}), do: compile(input)
 
+  @doc """
+  Purges and discards the module for the formula given (if exists.)
+  """
+  @spec purge(Formulae.t() | binary()) :: :ok | {:error, :not_compiled} | {:error, :code_delete}
+  def purge(input) when is_binary(input),
+    do: Formulae |> Module.concat(input) |> do_purge()
+
+  def purge(%Formulae{module: nil}), do: {:error, :not_compiled}
+
+  def purge(%Formulae{module: mod}), do: do_purge(mod)
+
+  @spec do_purge(atom()) :: :ok | {:error, :not_compiled} | {:error, :code_delete}
+  defp do_purge(mod) do
+    :code.purge(mod)
+    if :code.delete(mod), do: :ok, else: {:error, :code_delete}
+  end
+
   @doc ~S"""
   Curries the formula by substituting the known bindings into it.
 
