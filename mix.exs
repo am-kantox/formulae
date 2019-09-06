@@ -13,7 +13,11 @@ defmodule Formulae.Mixfile do
       start_permanent: Mix.env() == :prod,
       description: description(),
       package: package(),
-      deps: deps()
+      deps: deps(),
+      dialyzer: [
+        plt_file: {:no_warn, ".dialyzer/plts/dialyzer.plt"},
+        ignore_warnings: ".dialyzer/ignore.exs"
+      ]
     ]
   end
 
@@ -26,7 +30,8 @@ defmodule Formulae.Mixfile do
 
   defp deps do
     [
-      {:credo, "~> 1.0", only: :dev},
+      {:dialyxir, "~> 1.0.0-rc.6", only: [:dev, :test, :ci], runtime: false},
+      {:credo, "~> 1.0", only: [:dev, :test, :ci]},
       {:ex_doc, "~> 0.11", only: :dev}
     ]
   end

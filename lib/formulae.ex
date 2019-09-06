@@ -1,10 +1,61 @@
 defmodule Formulae do
   @moduledoc ~S"""
   A set of functions to deal with analytical formulae.
+
+  The typical way of using this module would be to call `Formulae.compile/1`
+  on the binary representing the string.
+
+  ```elixir
+  iex|1 ▶ f = Formulae.compile "a + :math.sin(3.14 * div(b, 2)) - c"
+
+  %Formulae{
+    ast: {:-, [line: 1],
+    [
+      {:+, [line: 1],
+        [
+          {:a, [line: 1], nil},
+          {{:., [line: 1], [:math, :sin]}, [line: 1],
+          [{:*, [line: 1], [3.14, {:div, [line: 1], [{:b, [line: 1], nil}, 2]}]}]}
+        ]},
+      {:c, [line: 1], nil}
+    ]},
+    eval: &:"Elixir.Formulae.a + :math.sin(3.14 * div(b, 2)) - c".eval/1,
+    formula: "a + :math.sin(3.14 * div(b, 2)) - c",
+    module: :"Elixir.Formulae.a + :math.sin(3.14 * div(b, 2)) - c",
+    variables: [:a, :b, :c]
+  }
+  ```
+
+  Now the formula is compiled and might be invoked by calling `Formulae.eval/2`
+  passing a formula _and_ bindings. First call to `eval/2` would lazily compile
+  the module if needed.
+
+  ```elixir
+  iex|2 ▶ f.eval.(a: 3, b: 4, c: 2)
+  0.9968146982068622
+  ```
+
+  The formulae might be curried.
+
+  ```elixir
+  iex|3 ▶ Formulae.curry(f, a: 3, b: 4)
+  %Formulae{
+    ast: ...,
+    eval: &:"Elixir.Formulae.3 + :math.sin(3.14 * div(4, 2)) - c".eval/1,
+    formula: "3 + :math.sin(3.14 * div(4, 2)) - c",
+    module: :"Elixir.Formulae.3 + :math.sin(3.14 * div(4, 2)) - c",
+    variables: [:c]
+  }
+  ```
   """
 
-  # @eval_in_place Application.get_env(:formulae, :eval_in_place, false)
-
+  @typedoc """
+  The formulae is internally represented as struct, exposing the original
+  binary representing the formula, AST, the module this formula was compiled
+  into, variables (bindings) this formula has _and_ the evaluator, which is
+  the function of arity one, accepting the bindings as a keyword list and
+  returning the result of this formula application.
+  """
   @type t :: %{
           __struct__: atom(),
           formula: binary(),
@@ -33,6 +84,9 @@ defmodule Formulae do
 
   @doc """
   Checks whether the formula was already compiled into module.
+
+  Typically one does not need to call this function, since this check would be
+  nevertheless transparently performed before the evaluation.
 
   _Examples:_
 
@@ -79,6 +133,26 @@ defmodule Formulae do
   end
 
   def compile(%Formulae{formula: input}), do: compile(input)
+
+  @doc ~S"""
+  Curries the formula by substituting the known bindings into it.
+
+  ## Example
+
+      iex> Formulae.curry("(temp - foo * 4) > speed / 3.14", temp: 7, speed: 3.14).formula
+      "7 - foo * 4 > 3.14 / 3.14"
+  """
+  @spec curry(input :: Formulae.t() | binary(), binding :: keyword(), opts :: keyword()) ::
+          Formulae.t()
+  def curry(input, binding \\ [], opts \\ [])
+
+  def curry(input, binding, _opts) when is_binary(input) do
+    {ast, vars} = ast_and_variables(input, binding)
+    %Formulae{variables: ^vars} = Formulae.compile(Macro.to_string(ast))
+  end
+
+  def curry(%Formulae{formula: formula}, binding, opts) when is_binary(formula),
+    do: curry(formula, binding, opts)
 
   @spec maybe_create_module({:module, atom()} | {:error, any()}, input :: binary()) ::
           Formulae.t()
@@ -184,26 +258,6 @@ defmodule Formulae do
 
     {ast, Enum.reverse(vars)}
   end
-
-  @doc ~S"""
-  Curries the formula by substituting the known bindings into it.
-
-  ## Example
-
-      iex> Formulae.curry("(temp - foo * 4) > speed / 3.14", temp: 7, speed: 3.14).formula
-      "7 - foo * 4 > 3.14 / 3.14"
-  """
-  @spec curry(input :: Formulae.t() | binary(), binding :: keyword(), opts :: keyword()) ::
-          Formulae.t()
-  def curry(input, binding \\ [], opts \\ [])
-
-  def curry(input, binding, _opts) when is_binary(input) do
-    {ast, vars} = ast_and_variables(input, binding)
-    %Formulae{variables: ^vars} = Formulae.compile(Macro.to_string(ast))
-  end
-
-  def curry(%Formulae{formula: formula}, binding, opts) when is_binary(formula),
-    do: curry(formula, binding, opts)
 
   @doc deprecated:
          "Use `Formulae.compile/1` and `%Formulae{}.variables` or `Formula.curry/2` instead"
@@ -400,7 +454,6 @@ defmodule Formulae do
   end
 
   defp do_evaluate(input, binding, opts) when is_tuple(input) do
-    # FIXME Make `nil` acceptable through SQL-like `IS NULL` syntax!
     binding = Enum.reject(binding, fn {_, v} -> is_nil(v) end)
 
     try do
@@ -411,7 +464,7 @@ defmodule Formulae do
       end
     rescue
       e in CompileError ->
-        raise(Formulae.RunnerError, formula: input, error: {:compile, e.description})
+        reraise(Formulae.RunnerError, formula: input, error: {:compile, e.description})
     end
   end
 

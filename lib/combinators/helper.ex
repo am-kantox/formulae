@@ -12,29 +12,7 @@ defmodule Formulae.Combinators.H do
      ]}
   end
 
-  def sink_permutation_clause(i),
-    do: {:->, [], [[{{:_, [], Elixir}, {:^, [], [idx(i)]}}, :ok], {[], :ok}]}
-
-  def sink_permutation_clauses(i, body) when i > 1 do
-    Enum.reverse([
-      {:->, [], [[{var(i), idx(i)}, :ok], body]}
-      | Enum.map((i - 1)..1, &sink_permutation_clause/1)
-    ])
-  end
-
-  def sink_permutation_clauses(1, body),
-    do: [{:->, [], [[{var(1), idx(1)}, :ok], body]}]
-
-  def stream_permutation_transform_clause(i, l, body) do
-    clauses = sink_permutation_clauses(i, body)
-
-    {{{:., [], [{:__aliases__, [alias: false], [:Stream]}, :transform]}, [],
-      [
-        {{:., [], [{:__aliases__, [alias: false], [:Stream]}, :with_index]}, [], [l]},
-        :ok,
-        {:fn, [], clauses}
-      ]}, :ok}
-  end
+  ### combinations
 
   def sink_combination_clause(i) when i > 1 do
     {:->, [],
@@ -73,6 +51,34 @@ defmodule Formulae.Combinators.H do
       ]}, :ok}
   end
 
+  ### permutations
+
+  def sink_permutation_clause(i),
+    do: {:->, [], [[{{:_, [], Elixir}, {:^, [], [idx(i)]}}, :ok], {[], :ok}]}
+
+  def sink_permutation_clauses(i, body) when i > 1 do
+    Enum.reverse([
+      {:->, [], [[{var(i), idx(i)}, :ok], body]}
+      | Enum.map((i - 1)..1, &sink_permutation_clause/1)
+    ])
+  end
+
+  def sink_permutation_clauses(1, body),
+    do: [{:->, [], [[{var(1), idx(1)}, :ok], body]}]
+
+  def stream_permutation_transform_clause(i, l, body) do
+    clauses = sink_permutation_clauses(i, body)
+
+    {{{:., [], [{:__aliases__, [alias: false], [:Stream]}, :transform]}, [],
+      [
+        {{:., [], [{:__aliases__, [alias: false], [:Stream]}, :with_index]}, [], [l]},
+        :ok,
+        {:fn, [], clauses}
+      ]}, :ok}
+  end
+
+  ### repeated permutations
+
   def stream_transform_clause(i, l, body) do
     {{{:., [], [{:__aliases__, [alias: false], [:Stream]}, :transform]}, [],
       [
@@ -80,15 +86,6 @@ defmodule Formulae.Combinators.H do
         :ok,
         {:fn, [], [{:->, [], [[{var(i), idx(i)}, :ok], body]}]}
       ]}, :ok}
-  end
-
-  def and_many([]), do: [true]
-  def and_many([clause]), do: clause
-
-  def and_many([c1, c2 | clauses]) do
-    Enum.reduce(clauses, {:&&, [context: Elixir, import: Kernel], [c1, c2]}, fn c, acc ->
-      {:&&, [context: Elixir, import: Kernel], [acc, c]}
-    end)
   end
 
   defmacro mapper(from, to, fun),
