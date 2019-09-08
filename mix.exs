@@ -2,7 +2,7 @@ defmodule Formulae.Mixfile do
   use Mix.Project
 
   @app :formulae
-  @ver "0.7.1"
+  @ver "0.7.2"
 
   def project do
     [

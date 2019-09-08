@@ -118,10 +118,12 @@ defmodule Formulae do
       iex> f.module.eval(a: 12, b: 2)
       true
 
-      iex> f = Formulae.compile("rem(a, 5) - b == 0")
-      iex> f.eval.(a: 11, b: 1)
+      iex> f = Formulae.compile("rem(a, 5) + b == a")
+      iex> f.variables
+      [:a, :b]
+      iex> f.eval.(a: 7, b: 5)
       true
-      iex> f.eval.(a: 12, b: 1)
+      iex> f.eval.(a: 7, b: 0)
       false
   """
   @spec compile(Formulae.t() | binary()) :: Formulae.t()
@@ -190,7 +192,7 @@ defmodule Formulae do
              v, acc -> {v, acc}
            end),
          escaped = Macro.escape(macro),
-         variables = Enum.reverse(variables),
+         variables = variables |> Enum.reverse() |> Enum.uniq(),
          vars = Enum.map(variables, &{&1, Macro.var(&1, nil)}),
          ast =
            (quote generated: true do
