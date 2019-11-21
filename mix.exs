@@ -47,7 +47,7 @@ defmodule Formulae.Mixfile do
     [
       name: @app,
       files: ["lib", "config", "mix.exs", "README*"],
-      source_ref: "v#{@version}",
+      source_ref: "v#{@ver}",
       source_url: "https://github.com/am-kantox/#{@app}",
       canonical: "http://hexdocs.pm/#{@app}",
       maintainers: ["Aleksei Matiushkin"],
