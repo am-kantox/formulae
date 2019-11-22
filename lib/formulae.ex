@@ -233,11 +233,9 @@ defmodule Formulae do
   """
   @spec check(string :: binary(), bindings :: keyword()) :: boolean()
   def check(string, bindings \\ []) do
-    try do
-      Formulae.evaluate(string, bindings)
-    rescue
-      Formulae.RunnerError -> false
-    end
+    Formulae.evaluate(string, bindings)
+  rescue
+    Formulae.RunnerError -> false
   end
 
   @doc deprecated: "Use `Formulae.compile/1` and `%Formulae{}.variables` instead"
@@ -351,6 +349,7 @@ defmodule Formulae do
       iex> Formulae.unit(~S|A = "3"|)
       {"a = \"3\"", {:==, [], [{:a, [line: 1], nil}, "3"]}}
   """
+  # credo:disable-for-lines:50
   def unit(input, env \\ []) when is_binary(input) do
     normalized = String.downcase(input)
 

@@ -2,18 +2,20 @@ defmodule Formulae.Mixfile do
   use Mix.Project
 
   @app :formulae
-  @ver "0.7.2"
+  @version "0.7.3"
 
   def project do
     [
       app: @app,
-      version: @ver,
+      version: @version,
       elixir: "~> 1.4",
       build_embedded: Mix.env() == :prod,
       start_permanent: Mix.env() == :prod,
       description: description(),
       package: package(),
+      aliases: aliases(),
       deps: deps(),
+      docs: docs(),
       dialyzer: [
         plt_file: {:no_warn, ".dialyzer/plts/dialyzer.plt"},
         ignore_warnings: ".dialyzer/ignore.exs"
@@ -36,6 +38,17 @@ defmodule Formulae.Mixfile do
     ]
   end
 
+  defp aliases do
+    [
+      quality: ["format", "credo --strict", "dialyzer"],
+      "quality.ci": [
+        "format --check-formatted",
+        "credo --strict",
+        "dialyzer --halt-exit-status"
+      ]
+    ]
+  end
+
   defp description do
     """
     A set of functions to deal with analytical formulae.
@@ -47,7 +60,7 @@ defmodule Formulae.Mixfile do
     [
       name: @app,
       files: ["lib", "config", "mix.exs", "README*"],
-      source_ref: "v#{@ver}",
+      source_ref: "v#{@version}",
       source_url: "https://github.com/am-kantox/#{@app}",
       canonical: "http://hexdocs.pm/#{@app}",
       maintainers: ["Aleksei Matiushkin"],
@@ -56,6 +69,21 @@ defmodule Formulae.Mixfile do
         "GitHub" => "https://github.com/am-kantox/formulae",
         "Docs" => "https://hexdocs.pm/formulae"
       }
+    ]
+  end
+
+  defp docs do
+    [
+      main: "readme",
+      source_ref: "v#{@version}",
+      canonical: "http://hexdocs.pm/#{@app}",
+      # logo: "stuff/images/logo.png",
+      source_url: "https://github.com/am-kantox/#{@app}",
+      # assets: "stuff/images",
+      extras: [
+        "README.md"
+      ],
+      groups_for_modules: []
     ]
   end
 end
