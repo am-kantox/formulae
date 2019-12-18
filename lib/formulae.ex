@@ -293,7 +293,7 @@ defmodule Formulae do
       iex> "a + b * 4 - :math.pow(c, 2) / d > 1.0 * e" |> Formulae.bindings?
       ~w|a b c d e|a
   """
-  @spec bindings?(formula :: Formulae.t() | binary(), binding :: keyword()) :: keyword()
+  @spec bindings?(formula :: Formulae.t() | binary() | tuple(), binding :: keyword()) :: keyword()
   def bindings?(formula, bindings \\ [])
 
   def bindings?(formula, bindings) when is_binary(formula),
@@ -448,6 +448,8 @@ defmodule Formulae do
       iex> Formulae.evaluate(Formulae.unit("a_b_c_490000 > 2"), [a_b_c_490000: 3])
       true
   """
+  @spec evaluate(input :: binary() | tuple(), binding :: keyword(), opts :: keyword()) ::
+          boolean() | no_return()
   def evaluate(input, binding \\ [], opts \\ [])
 
   def evaluate({_original, ast}, binding, opts),
@@ -482,7 +484,11 @@ defmodule Formulae do
       end
     rescue
       e in CompileError ->
-        reraise(Formulae.RunnerError, formula: input, error: {:compile, e.description})
+        reraise(
+          Formulae.RunnerError,
+          [formula: input, error: {:compile, e.description}],
+          __STACKTRACE__
+        )
     end
   end
 
