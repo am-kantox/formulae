@@ -34,5 +34,9 @@ iex|4 ▶ f.module
 :"Elixir.Formulae.rem(a, 5) - b == 0"
 ```
 
+## Changelog
+
+- **`0.8.0`** — generate combinators functions in `Formulae` module
+
 ## [Documentation](https://hexdocs.pm/formulae)
 

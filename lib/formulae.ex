@@ -494,6 +494,35 @@ defmodule Formulae do
 
   ##############################################################################
 
+  :formulae
+  |> Application.get_env(:generate_combinators, true)
+  |> if do
+    @max_combinations Application.get_env(:formulae, :max_combinations, 42)
+    @max_permutations Application.get_env(:formulae, :max_permutations, 12)
+
+    require Formulae.Combinators
+
+    @spec combinations(list :: list(), count :: non_neg_integer()) :: [list()]
+    @doc "Generated clauses for `n ∈ [1..#{@max_combinations}]` to be used with dynamic number"
+    Enum.each(1..@max_combinations, fn n ->
+      def combinations(l, unquote(n)), do: Formulae.Combinators.combinations(l, unquote(n))
+    end)
+
+    def combinations(_l, n),
+      do: raise(Formulae.RunnerError, formula: :combinations, error: {:too_high, inspect(n)})
+
+    @spec permutations(list :: list(), count :: non_neg_integer()) :: [list()]
+    @doc "Generated clauses for `n ∈ [1..#{@max_permutations}]` to be used with dynamic number"
+    Enum.each(1..@max_permutations, fn n ->
+      def permutations(l, unquote(n)), do: Formulae.Combinators.permutations(l, unquote(n))
+    end)
+
+    def permutations(_l, n),
+      do: raise(Formulae.RunnerError, formula: :permutations, error: {:too_high, inspect(n)})
+  end
+
+  ##############################################################################
+
   defp double_quote(string) when is_binary(string), do: "“" <> string <> "”"
   defp double_quote(string), do: double_quote(to_string(string))
 end
