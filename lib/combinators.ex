@@ -3,7 +3,7 @@ defmodule Formulae.Combinators do
   Functions to calculate all the combinations, permutations and
   repeated permutations of the list given.
 
-  _Examples_
+  ## Examples
 
       iex> Formulae.Combinators.combinations(~w|a b c d|a, 2)
       [[:a, :b], [:a, :c], [:a, :d], [:b, :c], [:b, :d], [:c, :d]]
@@ -18,6 +18,15 @@ defmodule Formulae.Combinators do
   **NB** this functions should not be used for relatively big `n` because
   they perform greedy evaluation. See to `Formulae.Combinators.Stream`
   for lazy analogues returning streams.
+
+  ## Dynamic numbers
+
+  To use combinations and permutations with dynamic number `n`, use
+  `Formulae.combinations/2` and `Formulae.permutations/2`, generated
+  in the compile time. By default, there are `42` clauses for combinations
+  and `12` for `permutations` are generated. They might be changed in `config`,
+  keys `:formulae, :max_combinations` and `:formulae, :max_permutations`. To
+  suppress generation, use `:formulae, :generate_combinators, false`.
 
   """
 

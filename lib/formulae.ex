@@ -502,6 +502,8 @@ defmodule Formulae do
 
     require Formulae.Combinators
 
+    @spec combinations(list :: list(), count :: non_neg_integer()) :: [list()]
+    @doc "Generated clauses for `n ∈ [1..#{@max_combinations}]` to be used with dynamic number"
     Enum.each(1..@max_combinations, fn n ->
       def combinations(l, unquote(n)), do: Formulae.Combinators.combinations(l, unquote(n))
     end)
@@ -509,6 +511,8 @@ defmodule Formulae do
     def combinations(_l, n),
       do: raise(Formulae.RunnerError, formula: :combinations, error: {:too_high, inspect(n)})
 
+    @spec permutations(list :: list(), count :: non_neg_integer()) :: [list()]
+    @doc "Generated clauses for `n ∈ [1..#{@max_permutations}]` to be used with dynamic number"
     Enum.each(1..@max_permutations, fn n ->
       def permutations(l, unquote(n)), do: Formulae.Combinators.permutations(l, unquote(n))
     end)
