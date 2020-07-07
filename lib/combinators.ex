@@ -28,6 +28,9 @@ defmodule Formulae.Combinators do
   keys `:formulae, :max_combinations` and `:formulae, :max_permutations`. To
   suppress generation, use `:formulae, :generate_combinators, false`.
 
+      iex> with n <- 2, do: Formulae.combinations(~w|a b c d|a, n)
+      [[:a, :b], [:a, :c], [:a, :d], [:b, :c], [:b, :d], [:c, :d]]
+
   """
 
   import Formulae.Combinators.H
