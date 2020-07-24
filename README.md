@@ -1,4 +1,4 @@
-# Formulae
+# Formulae    [![Kantox ❤ OSS](https://img.shields.io/badge/❤-kantox_oss-informational.svg)](https://kantox.com/)  ![Test](https://github.com/am-kantox/formulae/workflows/Test/badge.svg)  ![Dialyzer](https://github.com/am-kantox/formulae/workflows/Dialyzer/badge.svg)
 
 **Nifty precompiled formulae handling**
 
@@ -39,4 +39,3 @@ iex|4 ▶ f.module
 - **`0.8.0`** — generate combinators functions in `Formulae` module
 
 ## [Documentation](https://hexdocs.pm/formulae)
-
