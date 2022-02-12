@@ -18,7 +18,7 @@ jobs:
       run: |
         MIX_ENV=ci mix local.rebar --force
         MIX_ENV=ci mix local.hex --force
-        MIX_ENV=ci mix deps.get
+        MIX_ENV=ci mix deps.get --only ci
     - name: Run All Tests
       run: |
         MIX_ENV=ci mix quality.ci
