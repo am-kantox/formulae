@@ -22,3 +22,5 @@ erl_crash.dump
 /.elixir_ls/
 
 /.dialyzer/plts/*.plt*
+
+/bench/snapshots/
