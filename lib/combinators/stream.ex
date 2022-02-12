@@ -49,13 +49,24 @@ defmodule Formulae.Combinators.Stream do
   """
   import Formulae.Combinators.H
 
+  @typep stream_fun :: (any(), any() -> any())
+  @typep stream ::
+           stream_fun()
+           | %{
+               __struct__: Stream,
+               enum: Enum.t(),
+               funs: [stream_fun()],
+               accs: [stream_fun()],
+               done: nil | boolean()
+             }
+
   @doc """
   Lazily calculates combinations of the list, given as the first parameter,
   returns `{%Stream{}, :ok}` tuple.
 
   See `Formulae.Combinators.combinations/2` for greedy version.
   """
-  @spec combinations(list :: list(), count :: non_neg_integer()) :: {%Stream{}, :ok}
+  @spec combinations(list :: list(), count :: non_neg_integer()) :: {stream(), :ok}
 
   defmacro combinations(l, n) do
     Enum.reduce(n..1, {[mapper(1, n, &var/1)], :ok}, fn i, body ->
@@ -69,7 +80,7 @@ defmodule Formulae.Combinators.Stream do
 
   See `Formulae.Combinators.permutations/2` for greedy version.
   """
-  @spec permutations(list :: list(), count :: non_neg_integer()) :: {%Stream{}, :ok}
+  @spec permutations(list :: list(), count :: non_neg_integer()) :: {stream(), :ok}
 
   defmacro permutations(l, n) do
     Enum.reduce(n..1, {[mapper(1, n, &var/1)], :ok}, fn i, body ->
@@ -83,7 +94,7 @@ defmodule Formulae.Combinators.Stream do
 
   See `Formulae.Combinators.repeated_permutations/2` for greedy version.
   """
-  @spec repeated_permutations(list :: list(), count :: non_neg_integer()) :: {%Stream{}, :ok}
+  @spec repeated_permutations(list :: list(), count :: non_neg_integer()) :: {stream(), :ok}
 
   defmacro repeated_permutations(l, n) do
     Enum.reduce(n..1, {[mapper(1, n, &var/1)], :ok}, fn i, body ->

@@ -551,10 +551,10 @@ defmodule Formulae do
   ##############################################################################
 
   :formulae
-  |> Application.get_env(:generate_combinators, true)
+  |> Application.compile_env(:generate_combinators, true)
   |> if do
-    @max_combinations Application.get_env(:formulae, :max_combinations, 42)
-    @max_permutations Application.get_env(:formulae, :max_permutations, 12)
+    @max_combinations Application.compile_env(:formulae, :max_combinations, 42)
+    @max_permutations Application.compile_env(:formulae, :max_permutations, 12)
 
     require Formulae.Combinators
 
