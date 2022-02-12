@@ -67,6 +67,11 @@ defmodule Formulae do
         }
   defstruct formula: nil, ast: nil, guard: nil, module: nil, eval: nil, variables: nil
 
+  @typedoc false
+  @type option :: {:eval, :function | :guard} | {:alias, module()}
+  @typedoc false
+  @type options :: [option()]
+
   @doc """
   Evaluates the formula returning the result back.
 
@@ -124,12 +129,14 @@ defmodule Formulae do
       iex> Formulae.compiled?("foo > 42")
       true
   """
-  @spec compiled?(binary() | Formulae.t()) :: boolean()
-  def compiled?(input) when is_binary(input),
-    do: input |> module_name() |> Code.ensure_loaded?()
+  @spec compiled?(binary() | Formulae.t(), options :: options()) :: boolean()
+  def compiled?(input, options \\ [])
 
-  def compiled?(%Formulae{module: nil}), do: false
-  def compiled?(%Formulae{module: _}), do: true
+  def compiled?(input, options) when is_binary(input) and is_list(options),
+    do: input |> module_name(options) |> Code.ensure_loaded?()
+
+  def compiled?(%Formulae{module: nil}, _), do: false
+  def compiled?(%Formulae{module: _}, _), do: true
 
   @doc """
   Checks whether the formula was already compiled into module.
@@ -146,17 +153,16 @@ defmodule Formulae do
       iex> Formulae.ensure_compiled("bar > 42")
       {:module, :"Elixir.Formulae.bar > 42"}
   """
-  @spec ensure_compiled(binary() | Formulae.t()) ::
+  @spec ensure_compiled(binary() | Formulae.t(), options :: options()) ::
           {:module, module()}
           | {:error, :embedded | :badfile | :nofile | :on_load_failure | :unavailable}
-  def ensure_compiled(input) when is_binary(input),
-    do: input |> module_name() |> Code.ensure_compiled()
+  def ensure_compiled(input, options \\ [])
 
-  def ensure_compiled(%Formulae{module: nil}), do: {:error, :unavailable}
-  def ensure_compiled(%Formulae{module: module}), do: {:module, module}
+  def ensure_compiled(input, options) when is_binary(input) and is_list(options),
+    do: input |> module_name(options) |> Code.ensure_compiled()
 
-  @typedoc false
-  @type eval_kind :: :function | :guard
+  def ensure_compiled(%Formulae{module: nil}, _), do: {:error, :unavailable}
+  def ensure_compiled(%Formulae{module: module}, _), do: {:module, module}
 
   @doc """
   Compiles the formula into module.
@@ -181,27 +187,29 @@ defmodule Formulae do
       iex> f.eval.(a: 7, b: 0)
       false
   """
-  @spec compile(Formulae.t() | binary(), kind :: eval_kind()) :: Formulae.t()
-  def compile(input, eval_kind \\ :function)
+  @spec compile(Formulae.t() | binary(), options :: options()) :: Formulae.t()
+  def compile(input, options \\ [])
 
-  def compile(input, eval_kind) when is_binary(input) do
+  def compile(input, options) when is_binary(input) and is_list(options) do
     input
-    |> ensure_compiled()
-    |> maybe_create_module(input, eval_kind)
+    |> ensure_compiled(options)
+    |> maybe_create_module(input, options)
   end
 
-  def compile(%Formulae{formula: input}, eval_kind), do: compile(input, eval_kind)
+  def compile(%Formulae{formula: input}, options), do: compile(input, options)
 
   @doc """
   Purges and discards the module for the formula given (if exists.)
   """
-  @spec purge(Formulae.t() | binary()) :: :ok | {:error, :not_compiled} | {:error, :code_delete}
-  def purge(input) when is_binary(input),
-    do: input |> module_name() |> do_purge()
+  @spec purge(Formulae.t() | binary(), options()) ::
+          :ok | {:error, :not_compiled} | {:error, :code_delete}
+  def purge(input, options \\ [])
 
-  def purge(%Formulae{module: nil}), do: {:error, :not_compiled}
+  def purge(input, options) when is_binary(input) and is_list(options),
+    do: input |> module_name(options) |> do_purge()
 
-  def purge(%Formulae{module: mod}), do: do_purge(mod)
+  def purge(%Formulae{module: nil}, _), do: {:error, :not_compiled}
+  def purge(%Formulae{module: mod}, _), do: do_purge(mod)
 
   @spec do_purge(atom()) :: :ok | {:error, :not_compiled} | {:error, :code_delete}
   defp do_purge(mod) do
@@ -232,10 +240,10 @@ defmodule Formulae do
   @spec maybe_create_module(
           {:module, atom()} | {:error, any()},
           input :: binary(),
-          eval_kind :: eval_kind()
+          options :: options()
         ) ::
           Formulae.t()
-  defp maybe_create_module({:module, module}, input, _eval_kind),
+  defp maybe_create_module({:module, module}, input, _options),
     do: %Formulae{
       formula: input,
       module: module,
@@ -245,84 +253,46 @@ defmodule Formulae do
       eval: &module.eval/1
     }
 
-  defp maybe_create_module({:error, _}, input, eval_kind) do
-    with {:ok, macro} <- Code.string_to_quoted(input),
-         {^macro, variables} =
-           Macro.prewalk(macro, [], fn
-             {var, _, nil} = v, acc -> {v, [var | acc]}
-             v, acc -> {v, acc}
-           end),
-         escaped = Macro.escape(macro),
-         variables = variables |> Enum.reverse() |> Enum.uniq(),
-         varstubs = Enum.map(variables, fn _ -> {:_, [], nil} end),
-         vars = Enum.map(variables, &Macro.var(&1, nil)),
-         varsnames = Enum.zip(variables, vars),
-         guard =
-           (case eval_kind do
-              :guard ->
-                quote generated: true do
-                  defguard guard(unquote_splicing(vars)) when unquote(macro)
-                end
+  defp maybe_create_module({:error, _}, input, options) do
+    {:ok, macro} = Code.string_to_quoted(input)
+    eval_kind = Keyword.get(options, :eval, :function)
 
-              :function ->
-                quote generated: true do
-                  def guard(unquote_splicing(varstubs)) do
-                    raise(Formulae.SyntaxError,
-                      formula: unquote(input),
-                      error: {:guard, "not defined"}
-                    )
-                  end
-                end
-            end),
-         guard_ast = Macro.escape(guard),
-         eval =
-           (case eval_kind do
-              :guard ->
-                quote generated: true do
-                  def eval(unquote_splicing(vars))
-                      when guard(unquote_splicing(vars)),
-                      do: true
+    {^macro, variables} =
+      Macro.prewalk(macro, [], fn
+        {var, _, nil} = v, acc -> {v, [var | acc]}
+        v, acc -> {v, acc}
+      end)
 
-                  def eval(unquote_splicing(varstubs)), do: false
-                end
+    escaped = Macro.escape(macro)
+    variables = variables |> Enum.reverse() |> Enum.uniq()
 
-              :function ->
-                quote generated: true do
-                  defmacrop do_eval(unquote(varsnames)),
-                    do: {unquote(escaped), unquote(varsnames)}
+    guard = do_guard(eval_kind, variables, macro, input)
+    guard_ast = Macro.escape(guard)
 
-                  def eval(unquote(varsnames)), do: unquote(varsnames) |> do_eval() |> elem(0)
+    eval = do_eval(eval_kind, variables, escaped)
 
-                  def eval(%{} = binding),
-                    do: eval(for k <- @variables, do: {k, Map.get(binding, k)})
+    ast = [
+      guard,
+      quote generated: true do
+        @variables unquote(variables)
 
-                  def eval(args),
-                    do:
-                      {:error,
-                       {:invalid_arguments, [given: args, expected_keys: unquote(variables)]}}
-                end
-            end),
-         ast = [
-           guard,
-           quote generated: true do
-             @variables unquote(variables)
+        def ast, do: unquote(escaped)
+        def guard_ast, do: unquote(guard_ast)
+        def variables, do: @variables
+      end,
+      eval
+    ]
 
-             def ast, do: unquote(escaped)
-             def guard_ast, do: unquote(guard_ast)
-             def variables, do: @variables
-           end,
-           eval
-         ],
-         {:module, module, _, _} <-
-           Module.create(module_name(input), ast, __ENV__),
-         do: %Formulae{
-           formula: input,
-           ast: macro,
-           module: module,
-           guard: guard,
-           variables: variables,
-           eval: &module.eval/1
-         }
+    {:module, module, _, _} = Module.create(module_name(input, options), ast, __ENV__)
+
+    %Formulae{
+      formula: input,
+      ast: macro,
+      module: module,
+      guard: guard,
+      variables: variables,
+      eval: &module.eval/1
+    }
   end
 
   ##############################################################################
@@ -635,6 +605,61 @@ defmodule Formulae do
   defp double_quote(string) when is_binary(string), do: "“" <> string <> "”"
   defp double_quote(string), do: double_quote(to_string(string))
 
-  defp module_name(input) when is_binary(input),
-    do: Module.concat(Formulae, String.replace(input, <<?/>>, "÷"))
+  defp module_name(input, options) when is_binary(input) and is_list(options),
+    do:
+      Keyword.get_lazy(options, :alias, fn ->
+        Module.concat(Formulae, String.replace(input, <<?/>>, "÷"))
+      end)
+
+  defp do_guard(:guard, variables, macro, _input) do
+    vars = Enum.map(variables, &Macro.var(&1, nil))
+
+    quote generated: true do
+      defguard guard(unquote_splicing(vars)) when unquote(macro)
+    end
+  end
+
+  defp do_guard(:function, variables, _macro, input) do
+    varstubs = Enum.map(variables, fn _ -> {:_, [], nil} end)
+
+    quote generated: true do
+      def guard(unquote_splicing(varstubs)) do
+        raise(Formulae.SyntaxError,
+          formula: unquote(input),
+          error: {:guard, "not defined"}
+        )
+      end
+    end
+  end
+
+  defp do_eval(:guard, variables, _escaped) do
+    vars = Enum.map(variables, &Macro.var(&1, nil))
+    varstubs = Enum.map(vars, fn _ -> {:_, [], nil} end)
+
+    quote generated: true do
+      def eval(unquote_splicing(vars))
+          when guard(unquote_splicing(vars)),
+          do: true
+
+      def eval(unquote_splicing(varstubs)), do: false
+    end
+  end
+
+  defp do_eval(:function, variables, escaped) do
+    vars = Enum.map(variables, &Macro.var(&1, nil))
+    varsnames = Enum.zip(variables, vars)
+
+    quote generated: true do
+      defmacrop do_eval(unquote(varsnames)),
+        do: {unquote(escaped), unquote(varsnames)}
+
+      def eval(unquote(varsnames)), do: unquote(varsnames) |> do_eval() |> elem(0)
+
+      def eval(%{} = binding),
+        do: eval(for k <- @variables, do: {k, Map.get(binding, k)})
+
+      def eval(args),
+        do: {:error, {:invalid_arguments, [given: args, expected_keys: unquote(variables)]}}
+    end
+  end
 end

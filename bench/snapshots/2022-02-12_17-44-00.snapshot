@@ -1,0 +1,6 @@
+duration:1.0;mem stats:false;sys mem stats:false
+module;test;tags;iterations;elapsed
+Formulae.Bench	check (function)		50000	2441017
+Formulae.Bench	check (guard)		50000	2461338
+Formulae.Bench	generate modules (function)		20000	1352966
+Formulae.Bench	generate modules (guard)		20000	1374493
