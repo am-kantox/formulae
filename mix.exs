@@ -32,8 +32,8 @@ defmodule Formulae.Mixfile do
 
   defp deps do
     [
-      {:dialyxir, "~> 1.0.0-rc.6", only: [:dev, :test, :ci], runtime: false},
-      {:credo, "~> 1.0", only: [:dev, :test, :ci]},
+      {:dialyxir, "~> 1.0", only: [:dev, :ci], runtime: false},
+      {:credo, "~> 1.0", only: [:dev, :ci]},
       {:ex_doc, "~> 0.11", only: :dev}
     ]
   end

@@ -78,9 +78,36 @@ defmodule Formulae do
       iex> Formulae.eval("rem(a, 5) + rem(b, 4)", a: 21, b: 22)
       3
   """
-  @spec eval(string :: binary(), bindings :: keyword()) :: term()
-  def eval(string, bindings \\ []),
-    do: with(f <- Formulae.compile(string), do: f.eval.(bindings))
+  @spec eval(input :: binary() | Formulae.t(), bindings :: keyword()) :: term() | {:error, any()}
+  def eval(input, bindings \\ [])
+  def eval(%Formulae{eval: eval}, bindings), do: eval.(bindings)
+
+  def eval(input, bindings) when is_binary(input),
+    do: input |> Formulae.compile() |> eval(bindings)
+
+  @doc """
+  Evaluates the formula returning the result back; throws in a case of unseccessful processing.
+
+  _Examples:_
+
+      iex> Formulae.eval!("rem(a, 5) == 0", a: 20)
+      true
+      iex> Formulae.eval!("rem(a, 5) == 0")
+      ** (Formulae.RunnerError) Formula failed to run (compile): incomplete binding to eval a formula, lacking: [:a].
+  """
+  @spec eval!(input :: binary() | Formulae.t(), bindings :: keyword()) :: term() | no_return()
+  def eval!(input, bindings \\ []) do
+    with {:error, {:invalid_arguments, [given: given, expected_keys: expected_keys]}} <-
+           Formulae.eval(input, bindings) do
+      raise(
+        Formulae.RunnerError,
+        formula: input,
+        error:
+          {:compile,
+           "incomplete binding to eval a formula, lacking: #{inspect(expected_keys -- given)}"}
+      )
+    end
+  end
 
   @doc """
   Checks whether the formula was already compiled into module.
@@ -98,10 +125,34 @@ defmodule Formulae do
   """
   @spec compiled?(binary() | Formulae.t()) :: boolean()
   def compiled?(input) when is_binary(input),
-    do: Formulae |> Module.concat(input) |> Code.ensure_loaded?()
+    do: input |> module_name() |> Code.ensure_loaded?()
 
   def compiled?(%Formulae{module: nil}), do: false
   def compiled?(%Formulae{module: _}), do: true
+
+  @doc """
+  Checks whether the formula was already compiled into module.
+  Similar to `compiled?/1`, but returns what `Code.ensure_compiled/2` returns.
+
+  Typically one does not need to call this function, since this check would be
+  nevertheless transparently performed before the evaluation.
+
+  _Examples:_
+
+      iex> Formulae.ensure_compiled("bar > 42")
+      {:error, :nofile}
+      iex> Formulae.compile("bar > 42")
+      iex> Formulae.ensure_compiled("bar > 42")
+      {:module, :"Elixir.Formulae.bar > 42"}
+  """
+  @spec ensure_compiled(binary() | Formulae.t()) ::
+          {:module, module()}
+          | {:error, :embedded | :badfile | :nofile | :on_load_failure | :unavailable}
+  def ensure_compiled(input) when is_binary(input),
+    do: input |> module_name() |> Code.ensure_compiled()
+
+  def ensure_compiled(%Formulae{module: nil}), do: {:error, :unavailable}
+  def ensure_compiled(%Formulae{module: module}), do: {:module, module}
 
   @doc """
   Compiles the formula into module.
@@ -128,9 +179,8 @@ defmodule Formulae do
   """
   @spec compile(Formulae.t() | binary()) :: Formulae.t()
   def compile(input) when is_binary(input) do
-    Formulae
-    |> Module.concat(input)
-    |> Code.ensure_loaded()
+    input
+    |> ensure_compiled()
     |> maybe_create_module(input)
   end
 
@@ -141,7 +191,7 @@ defmodule Formulae do
   """
   @spec purge(Formulae.t() | binary()) :: :ok | {:error, :not_compiled} | {:error, :code_delete}
   def purge(input) when is_binary(input),
-    do: Formulae |> Module.concat(input) |> do_purge()
+    do: input |> module_name() |> do_purge()
 
   def purge(%Formulae{module: nil}), do: {:error, :not_compiled}
 
@@ -212,7 +262,7 @@ defmodule Formulae do
                   {:error, {:invalid_arguments, [given: args, expected_keys: unquote(variables)]}}
             end),
          {:module, module, _, _} <-
-           Module.create(Module.concat(Formulae, input), ast, __ENV__),
+           Module.create(module_name(input), ast, __ENV__),
          do: %Formulae{
            formula: input,
            ast: macro,
@@ -233,7 +283,7 @@ defmodule Formulae do
   """
   @spec check(string :: binary(), bindings :: keyword()) :: boolean()
   def check(string, bindings \\ []) do
-    Formulae.evaluate(string, bindings)
+    Formulae.eval(string, bindings)
   rescue
     Formulae.RunnerError -> false
   end
@@ -296,6 +346,9 @@ defmodule Formulae do
   @spec bindings?(formula :: Formulae.t() | binary() | tuple(), binding :: keyword()) :: keyword()
   def bindings?(formula, bindings \\ [])
 
+  def bindings?(%Formulae{variables: variables}, []),
+    do: variables
+
   def bindings?(formula, bindings) when is_binary(formula),
     do: with(f <- Formulae.curry(formula, bindings), do: f.variables)
 
@@ -322,31 +375,31 @@ defmodule Formulae do
 
   ## Examples
 
-      iex> Formulae.unit("3 > 2")
+      iex > Formulae.unit("3 > 2")
       {"3 > 2", {:>, [], [3, 2]}}
 
-      iex> Formulae.unit("3 - a > 2")
+      iex > Formulae.unit("3 - a > 2")
       {"3 - a > 2", {:>, [], [{:-, [line: 1], [3, {:a, [line: 1], nil}]}, 2]}}
 
-      iex> Formulae.unit("3 > A + 2")
+      iex > Formulae.unit("3 > A + 2")
       {"3 > a + 2",
         {:>, [],
           [{:-, [context: Formulae, import: Kernel],
             [3, {:+, [line: 1], [{:a, [line: 1], nil}, 2]}]}, 0]}}
 
-      iex> Formulae.unit("3 >= a + 2")
+      iex > Formulae.unit("3 >= a + 2")
       {"3 >= a + 2",
         {:>=, [],
           [{:-, [context: Formulae, import: Kernel],
             [3, {:+, [line: 1], [{:a, [line: 1], nil}, 2]}]}, 0]}}
 
-      iex> Formulae.unit("3 a > A + 2")
+      iex > Formulae.unit("3 a > A + 2")
       ** (Formulae.SyntaxError) Formula [3 a > A + 2] syntax is incorrect (parsing): syntax error before: “a”.
 
-      iex> Formulae.unit("a + 2 = 3")
+      iex > Formulae.unit("a + 2 = 3")
       {"a + 2 = 3", {:==, [], [{:+, [line: 1], [{:a, [line: 1], nil}, 2]}, 3]}}
 
-      iex> Formulae.unit(~S|A = "3"|)
+      iex > Formulae.unit(~S|A = "3"|)
       {"a = \"3\"", {:==, [], [{:a, [line: 1], nil}, "3"]}}
   """
   # credo:disable-for-lines:50
@@ -389,7 +442,7 @@ defmodule Formulae do
         {:ok, {op, _, _}} ->
           raise(Formulae.SyntaxError, formula: input, error: {:operation, double_quote(op)})
 
-        {:error, {1, message, op}} ->
+        {:error, {_, message, op}} ->
           raise(
             Formulae.SyntaxError,
             formula: input,
@@ -409,43 +462,46 @@ defmodule Formulae do
 
   ## Examples
 
-      iex> Formulae.evaluate(Formulae.unit("3 > 2"))
+      iex> Formulae.eval("3 > 2")
       true
 
-      iex> Formulae.evaluate(Formulae.unit("3 < 2"))
+      iex> Formulae.eval("3 < 2")
       false
 
-      iex> Formulae.evaluate(Formulae.unit("a < 2"), [a: 1])
+      iex> Formulae.eval("a < 2", a: 1)
       true
 
-      iex> Formulae.evaluate(Formulae.unit("a > 2"), [a: 1])
+      iex> Formulae.eval("a > 2", a: 1)
       false
 
-      iex> Formulae.evaluate(Formulae.unit("a < 2"), [])
-      ** (Formulae.RunnerError) Formula failed to run (compile): incomplete binding to evaluate a formula, lacking: [:a].
+      iex> Formulae.eval("a < 2", [])
+      {:error, {:invalid_arguments, [given: [], expected_keys: [:a]]}}
 
-      iex> Formulae.evaluate(Formulae.unit("a + 2 = 3"), [a: 1])
+      iex> Formulae.eval!("a < 2", [])
+      ** (Formulae.RunnerError) Formula failed to run (compile): incomplete binding to eval a formula, lacking: [:a].
+
+      iex> Formulae.eval("a + 2 == 3", a: 1)
       true
 
-      iex> Formulae.evaluate(Formulae.unit("a + 2 = 3"), [a: 2])
+      iex> Formulae.eval("a + 2 == 3", a: 2)
       false
 
-      iex> Formulae.evaluate(Formulae.unit(~S|a = "3"|), [a: "3"])
+      iex> Formulae.eval(~S|a == "3"|, a: "3")
       true
 
-      iex> Formulae.evaluate(Formulae.unit(~S|a = "3"|), [a: 3])
+      iex> Formulae.eval(~S|a == "3"|, a: 3)
       false
 
-      iex> Formulae.evaluate(Formulae.unit(~S|a = "3"|), [a: "hello"])
+      iex> Formulae.eval(~S|a == "3"|, a: "hello")
       false
 
-      iex> Formulae.evaluate("a + 2 = 3", [a: 2])
+      iex> Formulae.eval("a + 2 == 3", a: 2)
       false
 
-      iex> Formulae.evaluate(~S|a = "3"|, [a: "3"])
+      iex> Formulae.eval(~S|a == "3"|, a: "3")
       true
 
-      iex> Formulae.evaluate(Formulae.unit("a_b_c_490000 > 2"), [a_b_c_490000: 3])
+      iex> Formulae.eval("a_b_c_490000 > 2", a_b_c_490000: 3)
       true
   """
   @spec evaluate(input :: binary() | tuple(), binding :: keyword(), opts :: keyword()) ::
@@ -525,4 +581,7 @@ defmodule Formulae do
 
   defp double_quote(string) when is_binary(string), do: "“" <> string <> "”"
   defp double_quote(string), do: double_quote(to_string(string))
+
+  defp module_name(input) when is_binary(input),
+    do: Module.concat(Formulae, String.replace(input, <<?/>>, "÷"))
 end
