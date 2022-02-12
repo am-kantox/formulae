@@ -36,6 +36,11 @@ iex|4 ▶ f.module
 
 ## Changelog
 
+- **`0.9.0`**
+  - `options: [eval: :guard, alias: SomeModName]`
+  - fixes for modern _Elixir_
+  - optimizations in module generation
+  - benchmarks
 - **`0.8.0`** — generate combinators functions in `Formulae` module
 
 ## [Documentation](https://hexdocs.pm/formulae)
