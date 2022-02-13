@@ -137,7 +137,7 @@ defmodule Formulae do
 
   @doc """
   Checks whether the formula was already compiled into module.
-  Similar to `compiled?/1`, but returns what `Code.ensure_compiled/2` returns.
+  Similar to `compiled?/1`, but returns what `Code.ensure_compiled/1` returns.
 
   Typically one does not need to call this function, since this check would be
   nevertheless transparently performed before the evaluation.
