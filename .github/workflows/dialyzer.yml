@@ -5,20 +5,29 @@ on:
   - cron: "30 1 * * *"
 
 jobs:
-  build:
-
+  dialyzer:
     runs-on: ubuntu-latest
-
-    container:
-      image: elixir:1.9.1-slim
-
+    env:
+      MIX_ENV: ci
+    name: OTP ${{matrix.otp}} / Elixir ${{matrix.elixir}}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - pair:
+              otp: 24.2
+              elixir: 1.13.3
     steps:
-    - uses: actions/checkout@v1
-    - name: Install Dependencies
-      run: |
-        MIX_ENV=ci mix local.rebar --force
-        MIX_ENV=ci mix local.hex --force
-        MIX_ENV=ci mix deps.get --only ci
-    - name: Run All Tests
-      run: |
-        MIX_ENV=ci mix quality.ci
+      - uses: actions/checkout@v2
+      - uses: erlef/setup-elixir@v1
+        with:
+          otp-version: ${{matrix.pair.otp}}
+          elixir-version: ${{matrix.pair.elixir}}
+      - name: Install → Compile dependencies
+        run: |
+          mix local.rebar --force
+          mix local.hex --force
+          mix deps.get --only ci
+      - name: Run Dialyzer
+        run: |
+          mix quality.ci
