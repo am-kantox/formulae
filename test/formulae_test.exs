@@ -96,7 +96,14 @@ defmodule Formulae.Test do
     f = Formulae.compile("rem(a, 2) == 0", alias: AIsEven, eval: :guard)
     assert "~F[rem(a, 2) == 0]" == "#{f}"
 
-    assert "#ℱ<[ast: \"rem(a, 2) == 0\", eval: &AIsEven.eval/1, formula: \"rem(a, 2) == 0\", guard: \"defguard guard(a) when rem(a, 2) == 0\", module: AIsEven, variables: [:a]]>" ==
-             inspect(f)
+    case Version.compare(System.version(), "1.12.0") do
+      :lt ->
+        assert "#ℱ<[ast: \"rem(a, 2) == 0\", eval: &AIsEven.eval/1, formula: \"rem(a, 2) == 0\", guard: \"defguard(guard(a) when rem(a, 2) == 0)\", module: AIsEven, variables: [:a]]>" ==
+                 inspect(f)
+
+      _ ->
+        assert "#ℱ<[ast: \"rem(a, 2) == 0\", eval: &AIsEven.eval/1, formula: \"rem(a, 2) == 0\", guard: \"defguard guard(a) when rem(a, 2) == 0\", module: AIsEven, variables: [:a]]>" ==
+                 inspect(f)
+    end
   end
 end
