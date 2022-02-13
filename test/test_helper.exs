@@ -1,3 +1,6 @@
+Formulae.compile("x / y > 42", eval: :function)
+Formulae.compile("x == y", eval: :guard)
+
 Formulae.compile("rem(a, 2) == 0", eval: :guard, alias: AIsEven)
 Formulae.compile("rem(a, 2) == 0 and rem(b, 2) != 0", eval: :guard, alias: AIsEvenBIsOdd)
 

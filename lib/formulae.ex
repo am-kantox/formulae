@@ -240,8 +240,22 @@ defmodule Formulae do
           options :: options()
         ) ::
           Formulae.t()
-  defp maybe_create_module({:module, module}, input, _options),
-    do: %Formulae{
+  defp maybe_create_module({:module, module}, input, options) do
+    eval = Keyword.get(options, :eval, :function)
+
+    compatible =
+      module == Keyword.get(options, :alias, module) and
+        ((eval == :function and is_nil(module.guard_ast())) or
+           (eval == :guard and not is_nil(module.guard_ast())))
+
+    if not compatible,
+      do:
+        raise(Formulae.RunnerError,
+          formula: input,
+          error: {:incompatible_options, inspect(options)}
+        )
+
+    %Formulae{
       formula: input,
       module: module,
       ast: module.ast(),
@@ -249,6 +263,7 @@ defmodule Formulae do
       variables: module.variables(),
       eval: &module.eval/1
     }
+  end
 
   defp maybe_create_module({:error, _}, input, options) do
     {:ok, macro} = Code.string_to_quoted(input)
@@ -616,18 +631,7 @@ defmodule Formulae do
     end
   end
 
-  defp do_guard(:function, variables, _macro, input) do
-    varstubs = Enum.map(variables, fn _ -> {:_, [], nil} end)
-
-    quote generated: true do
-      def guard(unquote_splicing(varstubs)) do
-        raise(Formulae.SyntaxError,
-          formula: unquote(input),
-          error: {:guard, "not defined"}
-        )
-      end
-    end
-  end
+  defp do_guard(:function, _variables, _macro, _input), do: nil
 
   Enum.each(1..5, fn len ->
     defp do_eval(:guard, variables, _macro) when length(variables) == unquote(len) do
@@ -674,6 +678,35 @@ defmodule Formulae do
         if Keyword.keyword?(args),
           do: args |> Map.new() |> eval(),
           else: {:error, {:invalid_argument, [given: args, expected_keys: @variables]}}
+      end
+    end
+  end
+
+  defimpl String.Chars do
+    @moduledoc false
+    def to_string(%Formulae{formula: formula}) do
+      "~F[" <> formula <> "]"
+    end
+  end
+
+  defimpl Inspect do
+    @moduledoc false
+    import Inspect.Algebra
+
+    def inspect(%Formulae{} = f, opts) do
+      if Keyword.get(opts.custom_options, :sigil, false) do
+        "~F[" <> f.formula <> "]"
+      else
+        inner = [
+          ast: Macro.to_string(f.ast),
+          eval: f.eval,
+          formula: f.formula,
+          guard: if(f.guard, do: Macro.to_string(f.guard)),
+          module: f.module,
+          variables: f.variables
+        ]
+
+        concat(["#ℱ<", to_doc(inner, opts), ">"])
       end
     end
   end

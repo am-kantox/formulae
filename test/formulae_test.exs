@@ -3,6 +3,7 @@ defmodule Formulae.Test do
   require Formulae.Combinators
 
   doctest Formulae
+  doctest Formulae.Sigils
   doctest Formulae.Combinators
   doctest Formulae.Combinators.Stream
 
@@ -17,7 +18,7 @@ defmodule Formulae.Test do
   end
 
   test "guard" do
-    f = Formulae.compile("rem(a, 2) == 0", alias: AIsEven)
+    f = Formulae.compile("rem(a, 2) == 0", alias: AIsEven, eval: :guard)
 
     assert {:defguard, _,
             [
@@ -89,5 +90,13 @@ defmodule Formulae.Test do
 
       if assert?, do: assert(result), else: refute(result)
     end)
+  end
+
+  test "protocols" do
+    f = Formulae.compile("rem(a, 2) == 0", alias: AIsEven, eval: :guard)
+    assert "~F[rem(a, 2) == 0]" == "#{f}"
+
+    assert "#ℱ<[ast: \"rem(a, 2) == 0\", eval: &AIsEven.eval/1, formula: \"rem(a, 2) == 0\", guard: \"defguard guard(a) when rem(a, 2) == 0\", module: AIsEven, variables: [:a]]>" ==
+             inspect(f)
   end
 end
