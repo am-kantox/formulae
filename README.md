@@ -36,6 +36,9 @@ iex|4 ▶ f.module
 
 ## Changelog
 
+- **`0.10.0`**
+  - `Inspect` and `String.Chars` protocols implementation
+  - `Formulae.Sigils.sigil_F/1` aka `~F[x > y]`
 - **`0.9.0`**
   - `options: [eval: :guard, alias: SomeModName]`
   - fixes for modern _Elixir_
