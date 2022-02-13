@@ -99,18 +99,15 @@ defmodule Formulae do
       iex> Formulae.eval!("rem(a, 5) == 0", a: 20)
       true
       iex> Formulae.eval!("rem(a, 5) == 0")
-      ** (Formulae.RunnerError) Formula failed to run (compile): incomplete binding to eval a formula, lacking: [:a].
+      ** (Formulae.RunnerError) Formula failed to run (compile): [:missing_arguments] wrong or incomplete eval call: [given_keys: [], expected_keys: [:a]].
   """
   @spec eval!(input :: binary() | Formulae.t(), bindings :: keyword()) :: term() | no_return()
   def eval!(input, bindings \\ []) do
-    with {:error, {:invalid_arguments, [given: given, expected_keys: expected_keys]}} <-
-           Formulae.eval(input, bindings) do
+    with {:error, {error, data}} <- Formulae.eval(input, bindings) do
       raise(
         Formulae.RunnerError,
         formula: input,
-        error:
-          {:compile,
-           "incomplete binding to eval a formula, lacking: #{inspect(expected_keys -- given)}"}
+        error: {:compile, "[#{inspect(error)}] wrong or incomplete eval call: #{inspect(data)}"}
       )
     end
   end
@@ -269,7 +266,7 @@ defmodule Formulae do
     guard = do_guard(eval_kind, variables, macro, input)
     guard_ast = Macro.escape(guard)
 
-    eval = do_eval(eval_kind, variables, escaped)
+    eval = do_eval(eval_kind, variables, macro)
 
     ast = [
       guard,
@@ -498,10 +495,10 @@ defmodule Formulae do
       false
 
       iex> Formulae.eval("a < 2", [])
-      {:error, {:invalid_arguments, [given: [], expected_keys: [:a]]}}
+      {:error, {:missing_arguments, [given_keys: [], expected_keys: [:a]]}}
 
       iex> Formulae.eval!("a < 2", [])
-      ** (Formulae.RunnerError) Formula failed to run (compile): incomplete binding to eval a formula, lacking: [:a].
+      ** (Formulae.RunnerError) Formula failed to run (compile): [:missing_arguments] wrong or incomplete eval call: [given_keys: [], expected_keys: [:a]].
 
       iex> Formulae.eval("a + 2 == 3", a: 1)
       true
@@ -632,34 +629,52 @@ defmodule Formulae do
     end
   end
 
-  defp do_eval(:guard, variables, _escaped) do
-    vars = Enum.map(variables, &Macro.var(&1, nil))
-    varstubs = Enum.map(vars, fn _ -> {:_, [], nil} end)
+  Enum.each(1..5, fn len ->
+    defp do_eval(:guard, variables, _macro) when length(variables) == unquote(len) do
+      vars = Enum.map(variables, &Macro.var(&1, nil))
+      varsnames = variables |> Enum.zip(vars)
 
-    quote generated: true do
-      def eval(unquote_splicing(vars))
-          when guard(unquote_splicing(vars)),
-          do: true
+      require Formulae.Combinators
 
-      def eval(unquote_splicing(varstubs)), do: false
+      varsnames
+      |> Formulae.Combinators.permutations(unquote(len))
+      |> Enum.map(fn varsnames ->
+        quote generated: true do
+          def eval(unquote(varsnames)) when guard(unquote_splicing(vars)), do: true
+        end
+      end)
+      |> Kernel.++([
+        quote generated: true do
+          def eval(_), do: false
+        end
+      ])
     end
-  end
+  end)
 
-  defp do_eval(:function, variables, escaped) do
+  defp do_eval(:guard, variables, macro), do: do_eval(:function, variables, macro)
+
+  defp do_eval(:function, variables, macro) do
     vars = Enum.map(variables, &Macro.var(&1, nil))
     varsnames = Enum.zip(variables, vars)
 
     quote generated: true do
-      defmacrop do_eval(unquote(varsnames)),
-        do: {unquote(escaped), unquote(varsnames)}
+      def eval(unquote(varsnames)), do: unquote(macro)
 
-      def eval(unquote(varsnames)), do: unquote(varsnames) |> do_eval() |> elem(0)
+      def eval(%{} = args) do
+        bindings = for k <- @variables, v = Map.get(args, k), not is_nil(v), do: {k, v}
 
-      def eval(%{} = binding),
-        do: eval(for k <- @variables, do: {k, Map.get(binding, k)})
+        if length(bindings) == length(@variables),
+          do: eval(bindings),
+          else:
+            {:error,
+             {:missing_arguments, [given_keys: Keyword.keys(bindings), expected_keys: @variables]}}
+      end
 
-      def eval(args),
-        do: {:error, {:invalid_arguments, [given: args, expected_keys: unquote(variables)]}}
+      def eval(args) do
+        if Keyword.keyword?(args),
+          do: args |> Map.new() |> eval(),
+          else: {:error, {:invalid_argument, [given: args, expected_keys: @variables]}}
+      end
     end
   end
 end

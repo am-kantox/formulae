@@ -30,8 +30,64 @@ defmodule Formulae.Test do
     1..10
     |> Enum.chunk_every(2)
     |> Enum.each(fn [odd, even] ->
+      assert AIsEven.eval(a: even)
+      refute AIsEven.eval(a: odd)
       assert match?(a when AIsEven.guard(a), even)
       refute match?(a when AIsEven.guard(a), odd)
+    end)
+  end
+
+  test "multi arguments in clause" do
+    f = Formulae.compile("rem(a, 2) == 0 and rem(b, 2) != 0", eval: :guard, alias: AIsEvenBIsOdd)
+
+    assert {:defguard, _,
+            [
+              {:when, _,
+               [
+                 {:guard, _, [{:a, _, nil}, {:b, _, nil}]},
+                 {:and, _,
+                  [
+                    {:==, _, [{:rem, _, [{:a, _, nil}, 2]}, 0]},
+                    {:!=, _, [{:rem, _, [{:b, _, nil}, 2]}, 0]}
+                  ]}
+               ]}
+            ]} = f.guard
+
+    require AIsEvenBIsOdd
+
+    1..10
+    |> Enum.chunk_every(2)
+    |> Enum.each(fn [odd, even] ->
+      assert AIsEvenBIsOdd.eval(a: even, b: odd)
+      assert AIsEvenBIsOdd.eval(b: odd, a: even)
+      refute AIsEvenBIsOdd.eval(a: odd, b: even)
+      refute AIsEvenBIsOdd.eval(b: even, a: odd)
+      assert match?({a, b} when AIsEvenBIsOdd.guard(a, b), {even, odd})
+      refute match?({a, b} when AIsEvenBIsOdd.guard(a, b), {odd, even})
+      refute match?({a, b} when AIsEvenBIsOdd.guard(a, b), {even, even})
+      refute match?({a, b} when AIsEvenBIsOdd.guard(a, b), {odd, odd})
+    end)
+  end
+
+  test "6+ arguments in guard" do
+    f =
+      Formulae.compile("a1 == 0 and a2 == 0 and a3 == 0 and a4 == 0 and a5 == 0 and a6 == 0",
+        eval: :guard,
+        alias: A6
+      )
+
+    assert {:defguard, _, _} = f.guard
+
+    require A6
+
+    assert A6.eval(a1: 0, a2: 0, a3: 0, a4: 0, a5: 0, a6: 0)
+    assert A6.eval(a3: 0, a2: 0, a6: 0, a4: 0, a5: 0, a1: 0)
+    refute A6.eval(a6: 1, a1: 0, a2: 0, a3: 0, a4: 0, a5: 0)
+
+    Enum.each([{true, {0, 0, 0, 0, 0, 0}}, {false, {0, 0, 0, 0, 0, 1}}], fn {assert?, input} ->
+      result = match?({a1, a2, a3, a4, a5, a6} when A6.guard(a1, a2, a3, a4, a5, a6), input)
+
+      if assert?, do: assert(result), else: refute(result)
     end)
   end
 end
