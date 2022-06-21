@@ -358,7 +358,7 @@ defmodule Formulae do
           {v, acc}
       end)
 
-    {ast, Enum.reverse(vars)}
+    {ast, vars |> Enum.reverse() |> Enum.uniq()}
   end
 
   @doc deprecated:
