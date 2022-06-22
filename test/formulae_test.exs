@@ -107,22 +107,33 @@ defmodule Formulae.Test do
     end
   end
 
-  test "curry" do
-    f =
-      "a + b * 10"
-      |> Formulae.compile()
-      |> Formulae.curry(b: 3)
+  describe "curry" do
+    test "different variables" do
+      f =
+        "a + b * 10"
+        |> Formulae.compile()
+        |> Formulae.curry(b: 3)
 
-    assert 31 == f.eval.(a: 1)
-  end
+      assert 31 == f.eval.(a: 1)
+    end
 
-  test "curry (repeated variables)" do
-    f =
-      "a + a + b * 10"
-      |> Formulae.compile()
-      |> Formulae.curry(b: 3)
+    test "repeated variables" do
+      f =
+        "a + a + b * 10"
+        |> Formulae.compile()
+        |> Formulae.curry(b: 3)
 
-    assert f.formula == "a + a + 3 * 10"
-    assert f.variables == [:a]
+      assert "a + a + 3 * 10" == f.formula
+      assert [:a] == f.variables
+    end
+
+    test "curry with boolean values" do
+      f =
+        "a || b"
+        |> Formulae.compile()
+        |> Formulae.curry(a: true, b: false)
+
+      assert "true || false" == f.formula
+    end
   end
 end
