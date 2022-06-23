@@ -352,7 +352,9 @@ defmodule Formulae do
     {ast, vars} =
       Macro.prewalk(ast, [], fn
         {var, _, nil} = v, acc when is_atom(var) ->
-          if Keyword.has_key?(binding, var), do: {Keyword.fetch!(binding, var), acc}, else: {v, [var | acc]}
+          if Keyword.has_key?(binding, var),
+            do: {Keyword.fetch!(binding, var), acc},
+            else: {v, [var | acc]}
 
         v, acc ->
           {v, acc}
