@@ -226,9 +226,9 @@ defmodule Formulae do
           Formulae.t()
   def curry(input, binding \\ [], opts \\ [])
 
-  def curry(input, binding, _opts) when is_binary(input) do
+  def curry(input, binding, opts) when is_binary(input) do
     {ast, vars} = ast_and_variables(input, binding)
-    %Formulae{variables: ^vars} = Formulae.compile(Macro.to_string(ast))
+    %Formulae{variables: ^vars} = Formulae.compile(Macro.to_string(ast), opts)
   end
 
   def curry(%Formulae{formula: formula}, binding, opts) when is_binary(formula),

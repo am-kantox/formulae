@@ -135,5 +135,14 @@ defmodule Formulae.Test do
 
       assert "true || false" == f.formula
     end
+
+    test "use alias when curry" do
+      f =
+        "a + 1"
+        |> Formulae.compile()
+        |> Formulae.curry([a: 10], [alias: SumA])
+
+      assert SumA == f.module
+    end
   end
 end
