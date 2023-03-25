@@ -8,7 +8,7 @@ defmodule Formulae.Test do
   doctest Formulae.Combinators.Stream
 
   test "formulae with slashes (division)" do
-    f = Formulae.compile("a / 2")
+    f = Formulae.compile("a / 2", remote_calls: :none)
     assert 1.0 == f.eval.(a: 2)
   end
 
@@ -18,7 +18,7 @@ defmodule Formulae.Test do
   end
 
   test "guard" do
-    f = Formulae.compile("rem(a, 2) == 0", alias: AIsEven, eval: :guard)
+    f = Formulae.compile("rem(a, 2) == 0", alias: AIsEven, eval: :guard, remote_calls: :none)
 
     assert {:defguard, _,
             [
@@ -39,7 +39,12 @@ defmodule Formulae.Test do
   end
 
   test "multi arguments in clause" do
-    f = Formulae.compile("rem(a, 2) == 0 and rem(b, 2) != 0", eval: :guard, alias: AIsEvenBIsOdd)
+    f =
+      Formulae.compile("rem(a, 2) == 0 and rem(b, 2) != 0",
+        eval: :guard,
+        alias: AIsEvenBIsOdd,
+        remote_calls: :none
+      )
 
     assert {:defguard, _,
             [
@@ -74,7 +79,8 @@ defmodule Formulae.Test do
     f =
       Formulae.compile("a1 == 0 and a2 == 0 and a3 == 0 and a4 == 0 and a5 == 0 and a6 == 0",
         eval: :guard,
-        alias: A6
+        alias: A6,
+        remote_calls: :none
       )
 
     assert {:defguard, _, _} = f.guard
@@ -93,16 +99,16 @@ defmodule Formulae.Test do
   end
 
   test "protocols" do
-    f = Formulae.compile("rem(a, 2) == 0", alias: AIsEven, eval: :guard)
+    f = Formulae.compile("rem(a, 2) == 0", alias: AIsEven, eval: :guard, remote_calls: :none)
     assert "~F[rem(a, 2) == 0]" == "#{f}"
 
     case Version.compare(System.version(), "1.13.0") do
       :lt ->
-        assert ~s|#ℱ<[ast: "rem(a, 2) == 0", eval: &AIsEven.eval/1, formula: "rem(a, 2) == 0", guard: "defguard(guard(a) when rem(a, 2) == 0)", module: AIsEven, variables: [:a]]>| ==
+        assert ~s|#ℱ<[ast: "rem(a, 2) == 0", eval: &AIsEven.eval/1, formula: "rem(a, 2) == 0", guard: "defguard(guard(a) when rem(a, 2) == 0)", module: AIsEven, variables: [:a], remote_calls: []]>| ==
                  inspect(f)
 
       _ ->
-        assert ~s|#ℱ<[ast: "rem(a, 2) == 0", eval: &AIsEven.eval/1, formula: "rem(a, 2) == 0", guard: "defguard guard(a) when rem(a, 2) == 0", module: AIsEven, variables: [:a]]>| ==
+        assert ~s|#ℱ<[ast: "rem(a, 2) == 0", eval: &AIsEven.eval/1, formula: "rem(a, 2) == 0", guard: "defguard guard(a) when rem(a, 2) == 0", module: AIsEven, variables: [:a], remote_calls: []]>| ==
                  inspect(f)
     end
   end
@@ -111,8 +117,8 @@ defmodule Formulae.Test do
     test "different variables" do
       f =
         "a + b * 10"
-        |> Formulae.compile()
-        |> Formulae.curry(b: 3)
+        |> Formulae.compile(remote_calls: :none)
+        |> Formulae.curry([b: 3], remote_calls: :none)
 
       assert 31 == f.eval.(a: 1)
     end
@@ -120,8 +126,8 @@ defmodule Formulae.Test do
     test "repeated variables" do
       f =
         "a + a + b * 10"
-        |> Formulae.compile()
-        |> Formulae.curry(b: 3)
+        |> Formulae.compile(remote_calls: :none)
+        |> Formulae.curry([b: 3], remote_calls: :none)
 
       assert "a + a + 3 * 10" == f.formula
       assert [:a] == f.variables
@@ -130,8 +136,8 @@ defmodule Formulae.Test do
     test "curry with boolean values" do
       f =
         "a || b"
-        |> Formulae.compile()
-        |> Formulae.curry(a: true, b: false)
+        |> Formulae.compile(remote_calls: :none)
+        |> Formulae.curry([a: true, b: false], remote_calls: :none)
 
       assert "true || false" == f.formula
     end
@@ -139,8 +145,8 @@ defmodule Formulae.Test do
     test "use alias when curry" do
       f =
         "a + 1"
-        |> Formulae.compile()
-        |> Formulae.curry([a: 10], [alias: SumA])
+        |> Formulae.compile(remote_calls: :none)
+        |> Formulae.curry([a: 10], alias: SumA, remote_calls: :none)
 
       assert SumA == f.module
     end

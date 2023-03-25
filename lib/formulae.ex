@@ -63,9 +63,16 @@ defmodule Formulae do
           guard: nil | Macro.t(),
           module: nil | atom(),
           variables: nil | [atom()],
+          remote_calls: :all | [module()],
           eval: nil | (keyword() -> any())
         }
-  defstruct formula: nil, ast: nil, guard: nil, module: nil, eval: nil, variables: nil
+  defstruct formula: nil,
+            ast: nil,
+            guard: nil,
+            module: nil,
+            eval: nil,
+            variables: nil,
+            remote_calls: :all
 
   @typedoc false
   @type option :: {:eval, :function | :guard} | {:alias, module()}
@@ -84,12 +91,19 @@ defmodule Formulae do
       iex> Formulae.eval("rem(a, 5) + rem(b, 4)", a: 21, b: 22)
       3
   """
-  @spec eval(input :: binary() | Formulae.t(), bindings :: keyword()) :: term() | {:error, any()}
-  def eval(input, bindings \\ [])
-  def eval(%Formulae{eval: eval}, bindings), do: eval.(bindings)
+  @spec eval(input :: binary() | Formulae.t(), bindings :: keyword(), options :: keyword()) ::
+          term() | {:error, any()}
+  def eval(input, bindings \\ [], options \\ [remote_calls: :none])
+  def eval(%Formulae{eval: eval}, bindings, _options), do: eval.(bindings)
 
-  def eval(input, bindings) when is_binary(input),
-    do: input |> Formulae.compile() |> eval(bindings)
+  @doc deprecated: """
+       Create a formulae explicitly with `Formulae.compile/2`
+         and then pass it as the first argument to `eval/2`".
+
+       This call would compile the formulae with default options.
+       """
+  def eval(input, bindings, options) when is_binary(input),
+    do: input |> Formulae.compile(options) |> eval(bindings, options)
 
   @doc """
   Evaluates the formula returning the result back; throws in a case of unseccessful processing.
@@ -222,17 +236,18 @@ defmodule Formulae do
       iex> Formulae.curry("(temp - foo * 4) > speed / 3.14", temp: 7, speed: 3.14).formula
       "7 - foo * 4 > 3.14 / 3.14"
   """
-  @spec curry(input :: Formulae.t() | binary(), binding :: keyword(), opts :: keyword()) ::
+  @spec curry(input :: Formulae.t() | binary(), binding :: keyword(), options :: keyword()) ::
           Formulae.t()
-  def curry(input, binding \\ [], opts \\ [])
+  def curry(input, binding \\ [], options \\ [])
 
-  def curry(input, binding, opts) when is_binary(input) do
-    {ast, vars} = ast_and_variables(input, binding)
-    %Formulae{variables: ^vars} = Formulae.compile(Macro.to_string(ast), opts)
+  def curry(input, binding, options) when is_binary(input) do
+    {ast, vars} = ast_and_variables(input, binding, Keyword.take(options, [:remote_calls]))
+
+    %Formulae{variables: ^vars} = Formulae.compile(Macro.to_string(ast), options)
   end
 
-  def curry(%Formulae{formula: formula}, binding, opts) when is_binary(formula),
-    do: curry(formula, binding, opts)
+  def curry(%Formulae{formula: formula}, binding, options) when is_binary(formula),
+    do: curry(formula, binding, options)
 
   @spec maybe_create_module(
           {:module, atom()} | {:error, any()},
@@ -241,18 +256,39 @@ defmodule Formulae do
         ) ::
           Formulae.t()
   defp maybe_create_module({:module, module}, input, options) do
+    options = Keyword.put_new(options, :alias, module)
     eval = Keyword.get(options, :eval, :function)
 
+    options_remote_calls =
+      options
+      |> Keyword.get(:remote_calls)
+      |> fix_remote_calls()
+
     compatible =
-      module == Keyword.get(options, :alias, module) and
+      cond do
+        module.remote_calls() == :all -> true
+        options_remote_calls == :all -> false
+        true -> Enum.empty?(module.remote_calls() -- options_remote_calls)
+      end
+
+    compatible =
+      module == Keyword.fetch!(options, :alias) and
         ((eval == :function and is_nil(module.guard_ast())) or
-           (eval == :guard and not is_nil(module.guard_ast())))
+           (eval == :guard and not is_nil(module.guard_ast()))) and
+        compatible
 
     if not compatible,
       do:
         raise(Formulae.RunnerError,
           formula: input,
-          error: {:incompatible_options, inspect(options)}
+          error:
+            {:incompatible_options,
+             inspect(
+               {Keyword.take(options, [:alias, :eval, :remote_calls]),
+                alias: module,
+                eval: is_nil(module.guard_ast()),
+                remote_calls: module.remote_calls()}
+             )}
         )
 
     %Formulae{
@@ -261,19 +297,46 @@ defmodule Formulae do
       ast: module.ast(),
       guard: module.guard_ast(),
       variables: module.variables(),
+      remote_calls: module.remote_calls(),
       eval: &module.eval/1
     }
   end
 
   defp maybe_create_module({:error, _}, input, options) do
     {:ok, macro} = Code.string_to_quoted(input)
-    eval_kind = Keyword.get(options, :eval, :function)
+    {eval_kind, options} = Keyword.pop(options, :eval, :function)
+    {remote_calls, options} = Keyword.pop(options, :remote_calls)
 
-    {^macro, variables} =
-      Macro.prewalk(macro, [], fn
-        {var, _, nil} = v, acc -> {v, [var | acc]}
-        v, acc -> {v, acc}
+    remote_calls = fix_remote_calls(remote_calls)
+
+    {^macro, {^remote_calls, issues, variables}} =
+      Macro.prewalk(macro, {remote_calls, [], []}, fn
+        {var, _, nil} = v, {remote_calls, issues, acc} ->
+          {v, {remote_calls, issues, [var | acc]}}
+
+        v, {:all, _, _} = acc ->
+          {v, acc}
+
+        {:__aliases__, _, [_ | _]} = alias, {remote_calls, issues, acc} ->
+          wanna_remote_call = :elixir_aliases.expand_or_concat(alias, __ENV__)
+
+          if wanna_remote_call in remote_calls do
+            {alias, {remote_calls, issues, acc}}
+          else
+            {alias, {remote_calls, [wanna_remote_call | issues], acc}}
+          end
+
+        v, acc ->
+          {v, acc}
       end)
+
+    case issues do
+      [] ->
+        :ok
+
+      issues ->
+        raise(Formulae.SyntaxError, formula: input, error: {:remote_calls, inspect(issues)})
+    end
 
     escaped = Macro.escape(macro)
     variables = variables |> Enum.reverse() |> Enum.uniq()
@@ -290,6 +353,7 @@ defmodule Formulae do
 
         def ast, do: unquote(escaped)
         def guard_ast, do: unquote(guard_ast)
+        def remote_calls, do: unquote(remote_calls)
         def variables, do: @variables
       end,
       eval
@@ -303,8 +367,28 @@ defmodule Formulae do
       module: module,
       guard: guard,
       variables: variables,
+      remote_calls: remote_calls,
       eval: &module.eval/1
     }
+  end
+
+  defp expand_aliases({{:., _, [base, :{}]}, _, refs}, env) do
+    base = Macro.expand(base, env)
+
+    Enum.map(refs, fn
+      {:__aliases__, _, ref} ->
+        Module.concat([base | ref])
+
+      ref when is_atom(ref) ->
+        Module.concat(base, ref)
+
+      other ->
+        other
+    end)
+  end
+
+  defp expand_aliases(module, env) do
+    [Macro.expand(module, env)]
   end
 
   ##############################################################################
@@ -337,18 +421,28 @@ defmodule Formulae do
     end
   end
 
-  @spec ast_and_variables(input :: binary() | Formulae.t(), binding :: keyword()) ::
+  @spec ast_and_variables(
+          input :: binary() | Formulae.t(),
+          binding :: keyword(),
+          options :: keyword()
+        ) ::
           {tuple(), keyword()}
-  defp ast_and_variables(input, binding) when is_binary(input) do
+  defp ast_and_variables(input, binding, options) when is_binary(input) do
     input
-    |> Formulae.compile()
-    |> ast_and_variables(binding)
+    |> Formulae.compile(options)
+    |> ast_and_variables(binding, options)
   end
 
-  defp ast_and_variables(%Formulae{ast: nil, formula: input}, binding),
-    do: ast_and_variables(input, binding)
+  defp ast_and_variables(
+         %Formulae{ast: nil, formula: input, remote_calls: remote_calls},
+         binding,
+         options
+       ) do
+    options = Keyword.merge(options, remote_calls: remote_calls)
+    ast_and_variables(input, binding, options)
+  end
 
-  defp ast_and_variables(%Formulae{ast: ast}, binding) do
+  defp ast_and_variables(%Formulae{ast: ast}, binding, _options) do
     {ast, vars} =
       Macro.prewalk(ast, [], fn
         {var, _, nil} = v, acc when is_atom(var) ->
@@ -371,29 +465,29 @@ defmodule Formulae do
 
   ## Examples
 
-      iex> "a > 5" |> Formulae.bindings?
+      iex> "a > 5" |> Formulae.bindings?()
       ~w|a|a
 
-      iex> ":math.sin(a / (3.14 * b)) > c" |> Formulae.bindings?
+      iex> ":math.sin(a / (3.14 * b)) > c" |> Formulae.bindings?()
       ~w|a b c|a
 
-      iex> "a + b * 4 - :math.pow(c, 2) / d > 1.0 * e" |> Formulae.bindings?
+      iex> "a + b * 4 - :math.pow(c, 2) / d > 1.0 * e" |> Formulae.bindings?()
       ~w|a b c d e|a
   """
   @spec bindings?(formula :: Formulae.t() | binary() | tuple(), binding :: keyword()) :: keyword()
-  def bindings?(formula, bindings \\ [])
+  def bindings?(formula, bindings \\ [], options \\ [remote_calls: :none])
 
-  def bindings?(%Formulae{variables: variables}, []),
+  def bindings?(%Formulae{variables: variables}, [], _options),
     do: variables
 
-  def bindings?(formula, bindings) when is_binary(formula),
-    do: with(f <- Formulae.curry(formula, bindings), do: f.variables)
+  def bindings?(formula, bindings, options) when is_binary(formula),
+    do: with(f <- Formulae.curry(formula, bindings, options), do: f.variables)
 
-  def bindings?(formula, bindings) when is_tuple(formula),
-    do: bindings?(Macro.to_string(formula), bindings)
+  def bindings?(formula, bindings, options) when is_tuple(formula),
+    do: bindings?(Macro.to_string(formula), bindings, options)
 
-  def bindings?(%Formulae{formula: formula}, bindings),
-    do: bindings?(formula, bindings)
+  def bindings?(%Formulae{formula: formula}, bindings, options),
+    do: bindings?(formula, bindings, options)
 
   ##############################################################################
 
@@ -684,6 +778,30 @@ defmodule Formulae do
     end
   end
 
+  defp fix_remote_calls(remote_calls) do
+    remote_calls
+    |> expand_aliases(__ENV__)
+    |> case do
+      [:none] ->
+        []
+
+      [nil] ->
+        IO.warn(
+          "Default value for `remote_calls: :all` argument in a call to `Formulae.compile/2` is deprecated, " <>
+            "and will be changed to `:none` in v1.0.0",
+          __ENV__
+        )
+
+        :all
+
+      [:all] ->
+        :all
+
+      aliases ->
+        aliases
+    end
+  end
+
   defimpl String.Chars do
     @moduledoc false
     def to_string(%Formulae{formula: formula}) do
@@ -705,7 +823,8 @@ defmodule Formulae do
           formula: f.formula,
           guard: if(f.guard, do: Macro.to_string(f.guard)),
           module: f.module,
-          variables: f.variables
+          variables: f.variables,
+          remote_calls: f.remote_calls
         ]
 
         concat(["#ℱ<", to_doc(inner, opts), ">"])
