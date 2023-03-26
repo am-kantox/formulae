@@ -47,6 +47,18 @@ defmodule Formulae do
     variables: [:c]
   }
   ```
+
+  ---
+
+  Since `v0.10.0` there is an ability to pass `defaults` via `options`.
+
+  _Examples:_
+
+      iex> f = Formulae.compile("z + t", defaults: [t: 5])
+      ...> Formulae.eval(f, t: 10, z: 3)
+      13
+      ...> Formulae.eval(f, z: 3)
+      8
   """
 
   @typedoc false
@@ -121,11 +133,17 @@ defmodule Formulae do
       false
       iex> Formulae.eval("rem(a, 5) + rem(b, 4)", a: 21, b: 22)
       3
+      iex> Formulae.eval("rem(a, 5) == b", [a: 8], defaults: [b: 3])
+      true
+      iex> Formulae.eval("rem(a, 5) == c", [a: 8, c: 3], defaults: [b: 3])
+      true
   """
-  @spec eval(input :: binary() | Formulae.t(), bindings :: keyword(), options :: keyword()) ::
+  @spec eval(input :: binary() | Formulae.t(), bindings :: keyword(), options :: options()) ::
           term() | {:error, any()}
   def eval(input, bindings \\ [], options \\ [imports: :none])
-  def eval(%Formulae{eval: eval}, bindings, _options), do: eval.(bindings)
+
+  def eval(%Formulae{eval: eval, options: options}, bindings, _options),
+    do: options[:defaults] |> Keyword.merge(bindings) |> eval.()
 
   @doc deprecated: """
        Create a formulae explicitly with `Formulae.compile/2`
@@ -268,7 +286,7 @@ defmodule Formulae do
       iex> Formulae.curry("(temp - foo * 4) > speed / 3.14", temp: 7, speed: 3.14).formula
       "7 - foo * 4 > 3.14 / 3.14"
   """
-  @spec curry(input :: Formulae.t() | binary(), binding :: keyword(), options :: keyword()) ::
+  @spec curry(input :: Formulae.t() | binary(), binding :: keyword(), options :: options()) ::
           Formulae.t()
   def curry(input, binding \\ [], options \\ [])
 
@@ -360,9 +378,9 @@ defmodule Formulae do
   strictly evaluates to `true`, `false` otherwise. Compiles the formula
   before evaluation if needed.
   """
-  @spec check(string :: binary(), bindings :: keyword()) :: boolean()
-  def check(string, bindings \\ []) do
-    Formulae.eval(string, bindings)
+  @spec check(string :: binary(), bindings :: keyword(), options :: options()) :: boolean()
+  def check(string, bindings \\ [], options \\ []) do
+    Formulae.eval(string, bindings, options)
   rescue
     Formulae.RunnerError -> false
   end
@@ -384,7 +402,7 @@ defmodule Formulae do
   @spec ast_and_variables(
           input :: binary() | Formulae.t(),
           binding :: keyword(),
-          options :: keyword()
+          options :: options()
         ) ::
           {tuple(), keyword()}
   defp ast_and_variables(input, binding, options) when is_binary(input) do
@@ -596,21 +614,21 @@ defmodule Formulae do
       iex> Formulae.eval("a_b_c_490000 > 2", a_b_c_490000: 3)
       true
   """
-  @spec evaluate(input :: binary() | tuple(), binding :: keyword(), opts :: keyword()) ::
+  @spec evaluate(input :: binary() | tuple(), binding :: keyword(), options :: options()) ::
           boolean() | no_return()
-  def evaluate(input, binding \\ [], opts \\ [])
+  def evaluate(input, binding \\ [], options \\ [])
 
-  def evaluate({_original, ast}, binding, opts),
-    do: evaluate(ast, binding, opts)
+  def evaluate({_original, ast}, binding, options),
+    do: evaluate(ast, binding, options)
 
-  def evaluate(input, binding, opts) when is_binary(input),
-    do: evaluate(unit(input), binding, opts)
+  def evaluate(input, binding, options) when is_binary(input),
+    do: evaluate(unit(input), binding, options)
 
-  def evaluate(input, binding, opts) when is_tuple(input) do
+  def evaluate(input, binding, options) when is_tuple(input) do
     unresolved = bindings?(input, binding)
 
     if Enum.empty?(unresolved) do
-      do_evaluate(input, binding, opts)
+      do_evaluate(input, binding, options)
     else
       raise(
         Formulae.RunnerError,
@@ -621,11 +639,11 @@ defmodule Formulae do
     end
   end
 
-  defp do_evaluate(input, binding, opts) when is_tuple(input) do
+  defp do_evaluate(input, binding, options) when is_tuple(input) do
     binding = Enum.reject(binding, fn {_, v} -> is_nil(v) end)
 
     try do
-      case Code.eval_quoted(input, binding, opts) do
+      case Code.eval_quoted(input, binding, options) do
         {false, ^binding} -> false
         {true, ^binding} -> true
         other -> raise(Formulae.RunnerError, formula: input, error: {:weird, inspect(other)})

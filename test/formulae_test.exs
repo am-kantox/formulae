@@ -98,7 +98,7 @@ defmodule Formulae.Test do
     end)
   end
 
-  test "protocols" do
+  test "sigils" do
     f = Formulae.compile("rem(a, 2) == 0", alias: AIsEven, evaluator: :guard, imports: :none)
     assert "~F[rem(a, 2) == 0]" == "#{f}"
 
