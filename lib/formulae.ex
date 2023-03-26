@@ -333,6 +333,13 @@ defmodule Formulae do
       |> NimbleOptions.validate!(@options_schema)
       |> Keyword.update(:imports, [], &fix_imports/1)
 
+    imports =
+      case Keyword.fetch!(options, :imports) do
+        [] -> nil
+        [:...] -> nil
+        imports -> quote do: import(unquote_splicing(imports))
+      end
+
     {macro, variables} = reduce_ast!(input, options)
 
     escaped = Macro.escape(macro)
@@ -347,6 +354,8 @@ defmodule Formulae do
       guard,
       quote generated: true do
         @variables unquote(variables)
+
+        unquote(imports)
 
         def ast, do: unquote(escaped)
         def guard_ast, do: unquote(guard_ast)
@@ -773,7 +782,7 @@ defmodule Formulae do
       []
     )
 
-    [:all]
+    [:...]
   end
 
   defp validate_compatibility(module, options) do
@@ -788,9 +797,9 @@ defmodule Formulae do
     end
   end
 
-  defp validate_imports(:all, _), do: true
+  defp validate_imports(:..., _), do: true
 
-  defp validate_imports(imports, :all),
+  defp validate_imports(imports, :...),
     do:
       {:error,
        %Formulae.RunnerError{
@@ -827,7 +836,7 @@ defmodule Formulae do
         {var, _, nil} = v, {imports, issues, acc} ->
           {v, {imports, issues, [var | acc]}}
 
-        v, {:all, _, _} = acc ->
+        v, {[:...], _, _} = acc ->
           {v, acc}
 
         {:__aliases__, _, [_ | _]} = alias, {imports, issues, acc} ->

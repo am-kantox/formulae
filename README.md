@@ -6,7 +6,7 @@
 
 ```elixir
 def deps do
-  [{:formulae, "~> 0.5"}]
+  [{:formulae, "~> 0.11"}]
 end
 ```
 
@@ -32,6 +32,12 @@ iex|4 ▸ f.module
 
 ## Changelog
 
+- **`0.11.0`** `v1.0.0` pre-release
+  - `options` in a call to `Formulae.compile/3`
+  - accurate validation of module existence
+  - default arguments
+  - aliases
+  - imports
 - **`0.10.0`**
   - `Inspect` and `String.Chars` protocols implementation
   - `Formulae.Sigils.sigil_F/2` aka `~F[x > y]`
