@@ -7,29 +7,29 @@ defmodule Formulae.Sigils do
   ## Examples
 
       iex> import Formulae.Sigils
-      iex> ~F[x / y > 100]
+      iex> ~F[x / y > 42]
       %Formulae{
-        ast: Code.string_to_quoted!("x / y > 100"),
-        eval: &:"Elixir.Formulae.x ÷ y > 100".eval/1,
-        formula: "x / y > 100",
+        ast: Code.string_to_quoted!("x / y > 42"),
+        eval: &:"Elixir.Formulae.x ÷ y > 42".eval/1,
+        formula: "x / y > 42",
         guard: nil,
-        module: :"Elixir.Formulae.x ÷ y > 100",
+        module: :"Elixir.Formulae.x ÷ y > 42",
         remote_calls: [],
         variables: [:x, :y]
       }
-      iex> ~F[xz == yz]ga
+      iex> ~F[x == y]ga
       %Formulae{
-        ast: Code.string_to_quoted!("xz == yz"),
-        eval: &:"Elixir.Formulae.xz == yz".eval/1,
-        formula: "xz == yz",
+        ast: Code.string_to_quoted!("x == y"),
+        eval: &:"Elixir.Formulae.x == y".eval/1,
+        formula: "x == y",
         guard: {
           :defguard,
           Keyword.update!(elem(quote(generated: true, do: defguard(bar)), 1), :context, fn _ -> Formulae end),
-          [{:when, [generated: true], [{:guard, [generated: true], [{:xz, [], nil}, {:yz, [], nil}]}, {:==, [line: 1], [{:xz, [line: 1], nil}, {:yz, [line: 1], nil}]}]}]
+          [{:when, [generated: true], [{:guard, [generated: true], [{:x, [], nil}, {:y, [], nil}]}, {:==, [line: 1], [{:x, [line: 1], nil}, {:y, [line: 1], nil}]}]}]
         },
-        module: :"Elixir.Formulae.xz == yz",
+        module: :"Elixir.Formulae.x == y",
         remote_calls: :all,
-        variables: [:xz, :yz]
+        variables: [:x, :y]
       }
   """
 

@@ -259,23 +259,11 @@ defmodule Formulae do
     options = Keyword.put_new(options, :alias, module)
     eval = Keyword.get(options, :eval, :function)
 
-    options_remote_calls =
-      options
-      |> Keyword.get(:remote_calls)
-      |> fix_remote_calls()
-
-    compatible =
-      cond do
-        module.remote_calls() == :all -> true
-        options_remote_calls == :all -> false
-        true -> Enum.empty?(module.remote_calls() -- options_remote_calls)
-      end
-
     compatible =
       module == Keyword.fetch!(options, :alias) and
         ((eval == :function and is_nil(module.guard_ast())) or
            (eval == :guard and not is_nil(module.guard_ast()))) and
-        compatible
+        validate_remote_calls(module.remote_calls(), Keyword.get(options, :remote_calls))
 
     if not compatible,
       do:
@@ -370,25 +358,6 @@ defmodule Formulae do
       remote_calls: remote_calls,
       eval: &module.eval/1
     }
-  end
-
-  defp expand_aliases({{:., _, [base, :{}]}, _, refs}, env) do
-    base = Macro.expand(base, env)
-
-    Enum.map(refs, fn
-      {:__aliases__, _, ref} ->
-        Module.concat([base | ref])
-
-      ref when is_atom(ref) ->
-        Module.concat(base, ref)
-
-      other ->
-        other
-    end)
-  end
-
-  defp expand_aliases(module, env) do
-    [Macro.expand(module, env)]
   end
 
   ##############################################################################
@@ -780,26 +749,35 @@ defmodule Formulae do
 
   defp fix_remote_calls(remote_calls) do
     remote_calls
-    |> expand_aliases(__ENV__)
     |> case do
-      [:none] ->
+      :none ->
         []
 
-      [nil] ->
+      nil ->
         IO.warn(
           "Default value for `remote_calls: :all` argument in a call to `Formulae.compile/2` is deprecated, " <>
             "and will be changed to `:none` in v1.0.0",
-          __ENV__
+          []
         )
 
         :all
 
-      [:all] ->
+      :all ->
         :all
 
-      aliases ->
+      aliases when is_list(aliases) ->
         aliases
     end
+  end
+
+  defp validate_remote_calls(:all, _), do: true
+  defp validate_remote_calls(_, :all), do: false
+
+  defp validate_remote_calls(from_module, from_options) do
+    [from_module, from_options]
+    |> Enum.map(&fix_remote_calls/1)
+    |> Enum.reduce(&Kernel.--/2)
+    |> Enum.empty?()
   end
 
   defimpl String.Chars do

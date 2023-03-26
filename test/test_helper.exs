@@ -1,5 +1,5 @@
 Formulae.compile("x / y > 42", eval: :function, remote_calls: :none)
-Formulae.compile("x == y", eval: :guard, remote_calls: :none)
+Formulae.compile("x == y", eval: :guard, remote_calls: :all)
 
 Formulae.compile("rem(a, 2) == 0", eval: :guard, alias: AIsEven, remote_calls: :none)
 
