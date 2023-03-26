@@ -9,7 +9,7 @@ defmodule Formulae.Bench do
   end
 
   bench "generate modules (guard)" do
-    for i <- @short, do: Formulae.compile("b > #{i}", eval: :guard)
+    for i <- @short, do: Formulae.compile("b > #{i}", evaluator: :guard)
   end
 
   bench "check (function)", [f: Formulae.compile("ff > 500")] do

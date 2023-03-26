@@ -14,8 +14,8 @@ defmodule Formulae.Sigils do
         formula: "x / y > 42",
         guard: nil,
         module: :"Elixir.Formulae.x ÷ y > 42",
-        remote_calls: [],
-        variables: [:x, :y]
+        variables: [:x, :y],
+        options: [defaults: [], alias: nil, evaluator: :function, imports: []]
       }
       iex> ~F[x == y]ga
       %Formulae{
@@ -28,18 +28,18 @@ defmodule Formulae.Sigils do
           [{:when, [generated: true], [{:guard, [generated: true], [{:x, [], nil}, {:y, [], nil}]}, {:==, [line: 1], [{:x, [line: 1], nil}, {:y, [line: 1], nil}]}]}]
         },
         module: :"Elixir.Formulae.x == y",
-        remote_calls: :all,
-        variables: [:x, :y]
+        variables: [:x, :y],
+        options: [defaults: [], alias: nil, evaluator: :guard, imports: [:...]]
       }
   """
 
   @doc false
   defmacro sigil_F({:<<>>, _, [binary]}, modifiers) when is_binary(binary) do
     eval = if ?g in modifiers, do: :guard, else: :function
-    remote_calls = if ?a in modifiers, do: :all, else: :none
+    imports = if ?a in modifiers, do: :all, else: :none
 
     quote generated: true, location: :keep do
-      Formulae.compile(unquote(binary), eval: unquote(eval), remote_calls: unquote(remote_calls))
+      Formulae.compile(unquote(binary), evaluator: unquote(eval), imports: unquote(imports))
     end
   end
 end

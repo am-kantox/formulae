@@ -1,4 +1,4 @@
-defmodule Formulae.Mixfile do
+defmodule Formulae.MixProject do
   use Mix.Project
 
   @app :formulae
@@ -16,8 +16,10 @@ defmodule Formulae.Mixfile do
       aliases: aliases(),
       deps: deps(),
       docs: docs(),
+      xref: [exclude: [NimbleOptions]],
       dialyzer: [
         plt_file: {:no_warn, ".dialyzer/plts/dialyzer.plt"},
+        plt_add_apps: [:nimble_options],
         ignore_warnings: ".dialyzer/ignore.exs"
       ]
     ]
@@ -32,6 +34,7 @@ defmodule Formulae.Mixfile do
 
   defp deps do
     [
+      {:nimble_options, "~> 0.3 or ~> 1.0"},
       {:benchfella, "~> 0.3", only: [:dev]},
       {:dialyxir, "~> 1.0", only: [:dev, :ci], runtime: false},
       {:credo, "~> 1.0", only: [:dev, :ci]},

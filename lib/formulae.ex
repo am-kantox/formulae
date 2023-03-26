@@ -49,6 +49,42 @@ defmodule Formulae do
   ```
   """
 
+  @typedoc false
+  @type option ::
+          {:eval, :function | :guard}
+          | {:alias, module()}
+          | {:imports, :none | :all | [module()]}
+          | {:defaults, keyword()}
+  @typedoc false
+  @type options :: [option()]
+
+  @options_schema NimbleOptions.new!(
+                    alias: [
+                      required: false,
+                      default: nil,
+                      doc: "The alias to be used as a generated module name",
+                      type: :atom
+                    ],
+                    evaluator: [
+                      required: false,
+                      default: :function,
+                      doc: "The type of the evaluation to generate",
+                      type: {:in, [:function, :guard]}
+                    ],
+                    imports: [
+                      required: false,
+                      default: nil,
+                      doc: "The list of modules to allow remote calls from, or `:all | :none`",
+                      type: {:or, [{:in, [nil, :none, :all]}, {:list, :atom}, :atom]}
+                    ],
+                    defaults: [
+                      required: false,
+                      default: [],
+                      doc:
+                        "The default values to be used with formula when not suppled in binding"
+                    ]
+                  )
+
   @typedoc """
   The formulae is internally represented as struct, exposing the original
   binary representing the formula, AST, the module this formula was compiled
@@ -60,24 +96,19 @@ defmodule Formulae do
           __struct__: atom(),
           formula: binary(),
           ast: nil | Macro.t(),
+          eval: nil | (keyword() -> any()),
           guard: nil | Macro.t(),
           module: nil | atom(),
           variables: nil | [atom()],
-          remote_calls: :all | [module()],
-          eval: nil | (keyword() -> any())
+          options: options()
         }
   defstruct formula: nil,
             ast: nil,
+            eval: nil,
             guard: nil,
             module: nil,
-            eval: nil,
             variables: nil,
-            remote_calls: :all
-
-  @typedoc false
-  @type option :: {:eval, :function | :guard} | {:alias, module()}
-  @typedoc false
-  @type options :: [option()]
+            options: NimbleOptions.validate!([], @options_schema)
 
   @doc """
   Evaluates the formula returning the result back.
@@ -93,7 +124,7 @@ defmodule Formulae do
   """
   @spec eval(input :: binary() | Formulae.t(), bindings :: keyword(), options :: keyword()) ::
           term() | {:error, any()}
-  def eval(input, bindings \\ [], options \\ [remote_calls: :none])
+  def eval(input, bindings \\ [], options \\ [imports: :none])
   def eval(%Formulae{eval: eval}, bindings, _options), do: eval.(bindings)
 
   @doc deprecated: """
@@ -113,15 +144,16 @@ defmodule Formulae do
       iex> Formulae.eval!("rem(a, 5) == 0", a: 20)
       true
       iex> Formulae.eval!("rem(a, 5) == 0")
-      ** (Formulae.RunnerError) Formula failed to run (compile): [:missing_arguments] wrong or incomplete eval call: [given_keys: [], expected_keys: [:a]].
+      ** (Formulae.RunnerError) Formula ~F[rem(a, 5) == 0] failed to run (compile): [:missing_arguments], wrong or incomplete evaluator call: [given_keys: [], expected_keys: [:a]].
   """
   @spec eval!(input :: binary() | Formulae.t(), bindings :: keyword()) :: term() | no_return()
-  def eval!(input, bindings \\ []) do
-    with {:error, {error, data}} <- Formulae.eval(input, bindings) do
+  def eval!(input, bindings \\ [], options \\ []) do
+    with {:error, {error, data}} <- Formulae.eval(input, bindings, options) do
       raise(
         Formulae.RunnerError,
         formula: input,
-        error: {:compile, "[#{inspect(error)}] wrong or incomplete eval call: #{inspect(data)}"}
+        error:
+          {:compile, "[#{inspect(error)}], wrong or incomplete evaluator call: #{inspect(data)}"}
       )
     end
   end
@@ -241,13 +273,13 @@ defmodule Formulae do
   def curry(input, binding \\ [], options \\ [])
 
   def curry(input, binding, options) when is_binary(input) do
-    {ast, vars} = ast_and_variables(input, binding, Keyword.take(options, [:remote_calls]))
-
-    %Formulae{variables: ^vars} = Formulae.compile(Macro.to_string(ast), options)
+    curry(Formulae.compile(input, options), binding, options)
   end
 
-  def curry(%Formulae{formula: formula}, binding, options) when is_binary(formula),
-    do: curry(formula, binding, options)
+  def curry(%Formulae{} = input, binding, options) do
+    {ast, vars} = ast_and_variables(input, binding, options)
+    %Formulae{variables: ^vars} = Formulae.compile(Macro.to_string(ast), options)
+  end
 
   @spec maybe_create_module(
           {:module, atom()} | {:error, any()},
@@ -256,28 +288,15 @@ defmodule Formulae do
         ) ::
           Formulae.t()
   defp maybe_create_module({:module, module}, input, options) do
-    options = Keyword.put_new(options, :alias, module)
-    eval = Keyword.get(options, :eval, :function)
+    with {:error, ex} <- validate_compatibility(module, options), do: raise(ex)
 
-    compatible =
-      module == Keyword.fetch!(options, :alias) and
-        ((eval == :function and is_nil(module.guard_ast())) or
-           (eval == :guard and not is_nil(module.guard_ast()))) and
-        validate_remote_calls(module.remote_calls(), Keyword.get(options, :remote_calls))
+    legacy_ast = Macro.to_string(module.ast())
 
-    if not compatible,
-      do:
-        raise(Formulae.RunnerError,
-          formula: input,
-          error:
-            {:incompatible_options,
-             inspect(
-               {Keyword.take(options, [:alias, :eval, :remote_calls]),
-                alias: module,
-                eval: is_nil(module.guard_ast()),
-                remote_calls: module.remote_calls()}
-             )}
-        )
+    unless input == legacy_ast do
+      raise Formulae.RunnerError,
+        formula: input,
+        error: {:incompatible, "Existing: " <> inspect(Macro.to_string(module.ast()))}
+    end
 
     %Formulae{
       formula: input,
@@ -285,54 +304,26 @@ defmodule Formulae do
       ast: module.ast(),
       guard: module.guard_ast(),
       variables: module.variables(),
-      remote_calls: module.remote_calls(),
+      options: module.options(),
       eval: &module.eval/1
     }
   end
 
   defp maybe_create_module({:error, _}, input, options) do
-    {:ok, macro} = Code.string_to_quoted(input)
-    {eval_kind, options} = Keyword.pop(options, :eval, :function)
-    {remote_calls, options} = Keyword.pop(options, :remote_calls)
+    options =
+      options
+      |> NimbleOptions.validate!(@options_schema)
+      |> Keyword.update(:imports, [], &fix_imports/1)
 
-    remote_calls = fix_remote_calls(remote_calls)
-
-    {^macro, {^remote_calls, issues, variables}} =
-      Macro.prewalk(macro, {remote_calls, [], []}, fn
-        {var, _, nil} = v, {remote_calls, issues, acc} ->
-          {v, {remote_calls, issues, [var | acc]}}
-
-        v, {:all, _, _} = acc ->
-          {v, acc}
-
-        {:__aliases__, _, [_ | _]} = alias, {remote_calls, issues, acc} ->
-          wanna_remote_call = :elixir_aliases.expand_or_concat(alias, __ENV__)
-
-          if wanna_remote_call in remote_calls do
-            {alias, {remote_calls, issues, acc}}
-          else
-            {alias, {remote_calls, [wanna_remote_call | issues], acc}}
-          end
-
-        v, acc ->
-          {v, acc}
-      end)
-
-    case issues do
-      [] ->
-        :ok
-
-      issues ->
-        raise(Formulae.SyntaxError, formula: input, error: {:remote_calls, inspect(issues)})
-    end
+    {macro, variables} = reduce_ast!(input, options)
 
     escaped = Macro.escape(macro)
     variables = variables |> Enum.reverse() |> Enum.uniq()
 
-    guard = do_guard(eval_kind, variables, macro, input)
+    guard = do_guard(options[:evaluator], variables, macro, input)
     guard_ast = Macro.escape(guard)
 
-    eval = do_eval(eval_kind, variables, macro)
+    eval = do_eval(options[:evaluator], variables, macro)
 
     ast = [
       guard,
@@ -341,7 +332,7 @@ defmodule Formulae do
 
         def ast, do: unquote(escaped)
         def guard_ast, do: unquote(guard_ast)
-        def remote_calls, do: unquote(remote_calls)
+        def options, do: unquote(options)
         def variables, do: @variables
       end,
       eval
@@ -355,7 +346,7 @@ defmodule Formulae do
       module: module,
       guard: guard,
       variables: variables,
-      remote_calls: remote_calls,
+      options: options,
       eval: &module.eval/1
     }
   end
@@ -398,16 +389,17 @@ defmodule Formulae do
           {tuple(), keyword()}
   defp ast_and_variables(input, binding, options) when is_binary(input) do
     input
-    |> Formulae.compile(options)
+    |> Formulae.compile(Keyword.delete(options, :alias))
     |> ast_and_variables(binding, options)
   end
 
   defp ast_and_variables(
-         %Formulae{ast: nil, formula: input, remote_calls: remote_calls},
+         %Formulae{ast: nil, formula: input, options: options},
          binding,
-         options
+         new_options
        ) do
-    options = Keyword.merge(options, remote_calls: remote_calls)
+    options = Keyword.merge(new_options, options)
+    # [AM] FIX
     ast_and_variables(input, binding, options)
   end
 
@@ -437,14 +429,14 @@ defmodule Formulae do
       iex> "a > 5" |> Formulae.bindings?()
       ~w|a|a
 
-      iex> ":math.sin(a / (3.14 * b)) > c" |> Formulae.bindings?()
+      iex> ":math.sin(a / (3.14 * b)) > c" |> Formulae.bindings?([], imports: [:math])
       ~w|a b c|a
 
-      iex> "a + b * 4 - :math.pow(c, 2) / d > 1.0 * e" |> Formulae.bindings?()
+      iex> "a + b * 4 - :math.pow(c, 2) / d > 1.0 * e" |> Formulae.bindings?([], imports: :math)
       ~w|a b c d e|a
   """
   @spec bindings?(formula :: Formulae.t() | binary() | tuple(), binding :: keyword()) :: keyword()
-  def bindings?(formula, bindings \\ [], options \\ [remote_calls: :none])
+  def bindings?(formula, bindings \\ [], options \\ [imports: :none])
 
   def bindings?(%Formulae{variables: variables}, [], _options),
     do: variables
@@ -578,7 +570,7 @@ defmodule Formulae do
       {:error, {:missing_arguments, [given_keys: [], expected_keys: [:a]]}}
 
       iex> Formulae.eval!("a < 2", [])
-      ** (Formulae.RunnerError) Formula failed to run (compile): [:missing_arguments] wrong or incomplete eval call: [given_keys: [], expected_keys: [:a]].
+      ** (Formulae.RunnerError) Formula ~F[a < 2] failed to run (compile): [:missing_arguments], wrong or incomplete evaluator call: [given_keys: [], expected_keys: [:a]].
 
       iex> Formulae.eval("a + 2 == 3", a: 1)
       true
@@ -682,11 +674,9 @@ defmodule Formulae do
   defp double_quote(string) when is_binary(string), do: "“" <> string <> "”"
   defp double_quote(string), do: double_quote(to_string(string))
 
-  defp module_name(input, options) when is_binary(input) and is_list(options),
-    do:
-      Keyword.get_lazy(options, :alias, fn ->
-        Module.concat(Formulae, String.replace(input, <<?/>>, "÷"))
-      end)
+  defp module_name(input, options) when is_binary(input) and is_list(options) do
+    Keyword.get(options, :alias) || Module.concat(Formulae, String.replace(input, <<?/>>, "÷"))
+  end
 
   defp do_guard(:guard, variables, macro, _input) do
     vars = Enum.map(variables, &Macro.var(&1, nil))
@@ -747,37 +737,106 @@ defmodule Formulae do
     end
   end
 
-  defp fix_remote_calls(remote_calls) do
-    remote_calls
-    |> case do
-      :none ->
-        []
-
-      nil ->
-        IO.warn(
-          "Default value for `remote_calls: :all` argument in a call to `Formulae.compile/2` is deprecated, " <>
-            "and will be changed to `:none` in v1.0.0",
-          []
-        )
-
-        :all
-
-      :all ->
-        :all
-
-      aliases when is_list(aliases) ->
-        aliases
+  defp fix_imports(imports) do
+    case imports do
+      nil -> fix_imports_warn()
+      :none -> []
+      :all -> [:...]
+      alias when is_atom(alias) -> [alias]
+      aliases when is_list(aliases) -> aliases
     end
   end
 
-  defp validate_remote_calls(:all, _), do: true
-  defp validate_remote_calls(_, :all), do: false
+  # [AM] Remove this when we disallow default value for it
+  defp fix_imports_warn do
+    IO.warn(
+      "Default value for `imports: :all` argument in a call to `Formulae.compile/2` is deprecated, " <>
+        "and will be changed to `:none` in v1.0.0",
+      []
+    )
 
-  defp validate_remote_calls(from_module, from_options) do
+    [:all]
+  end
+
+  defp validate_compatibility(module, options) do
+    with {:ok, validated} <- NimbleOptions.validate(options, @options_schema),
+         {:imports, true} <-
+           {:imports, validate_imports(module.options[:imports], validated[:imports])},
+         {:alias, true} <- {:alias, module == Keyword.get(validated, :alias, module)},
+         {:defaults, true} <-
+           {:defaults, Keyword.equal?(module.options[:defaults], validated[:defaults])},
+         {:evaluator, true} <- {:evaluator, validate_evaluator(validated[:evaluator], module)} do
+      {:ok, validated}
+    end
+  end
+
+  defp validate_imports(:all, _), do: true
+
+  defp validate_imports(imports, :all),
+    do:
+      {:error,
+       %Formulae.RunnerError{
+         error: :imports,
+         message: "Existing module has imports restricted to " <> inspect(imports)
+       }}
+
+  defp validate_imports(from_module, from_options) do
     [from_module, from_options]
-    |> Enum.map(&fix_remote_calls/1)
+    |> Enum.map(&fix_imports/1)
     |> Enum.reduce(&Kernel.--/2)
     |> Enum.empty?()
+    |> Kernel.||(
+      {:error,
+       %Formulae.RunnerError{
+         error: :imports,
+         message:
+           "Incompatible imports: " <> inspect(existing: from_module, supplied: from_options)
+       }}
+    )
+  end
+
+  defp validate_evaluator(:guard, module), do: is_nil(module.guard_ast())
+  defp validate_evaluator(:function, module), do: not is_nil(module.guard_ast())
+  # [AM] maybe warn
+  defp validate_evaluator(_, module), do: not is_nil(module.guard_ast())
+
+  defp reduce_ast!(input, options) do
+    macro = Code.string_to_quoted!(input)
+    imports = Keyword.fetch!(options, :imports)
+
+    {^macro, {^imports, issues, variables}} =
+      Macro.prewalk(macro, {imports, [], []}, fn
+        {var, _, nil} = v, {imports, issues, acc} ->
+          {v, {imports, issues, [var | acc]}}
+
+        v, {:all, _, _} = acc ->
+          {v, acc}
+
+        {:__aliases__, _, [_ | _]} = alias, {imports, issues, acc} ->
+          wanna_import = :elixir_aliases.expand_or_concat(alias, __ENV__)
+
+          if wanna_import in imports do
+            {alias, {imports, issues, acc}}
+          else
+            {alias, {imports, [wanna_import | issues], acc}}
+          end
+
+        {:., _, [wanna_import, _fun]} = alias, {imports, issues, acc} ->
+          if wanna_import in imports do
+            {alias, {imports, issues, acc}}
+          else
+            {alias, {imports, [wanna_import | issues], acc}}
+          end
+
+        v, acc ->
+          {v, acc}
+      end)
+
+    unless Enum.empty?(issues) do
+      raise %Formulae.SyntaxError{formula: input, error: {"Restricted imports", issues}}
+    end
+
+    {macro, variables}
   end
 
   defimpl String.Chars do
@@ -802,7 +861,7 @@ defmodule Formulae do
           guard: if(f.guard, do: Macro.to_string(f.guard)),
           module: f.module,
           variables: f.variables,
-          remote_calls: f.remote_calls
+          options: f.options
         ]
 
         concat(["#ℱ<", to_doc(inner, opts), ">"])
