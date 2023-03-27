@@ -32,6 +32,7 @@ iex|4 ▸ f.module
 
 ## Changelog
 
+- **`0.11.1`** [FIX] `Formulae.formulas/1` + aliases are handled more naturally
 - **`0.11.0`** `v1.0.0` pre-release
   - `options` in a call to `Formulae.compile/2`
   - accurate validation of module existence

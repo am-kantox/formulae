@@ -48,16 +48,13 @@ defmodule Formulae do
   }
   ```
 
-  ---
-
   Since `v0.10.0` there is an ability to pass `defaults` via `options`.
 
   _Examples:_
 
-      iex> f = Formulae.compile("z + t", defaults: [t: 5])
-      ...> Formulae.eval(f, t: 10, z: 3)
+      iex> "z + t" |> Formulae.compile(defaults: [t: 5]) |> Formulae.eval(t: 10, z: 3)
       13
-      ...> Formulae.eval(f, z: 3)
+      iex> "z + t" |> Formulae.compile(defaults: [t: 5]) |> Formulae.eval(z: 3)
       8
   """
 
@@ -121,6 +118,34 @@ defmodule Formulae do
             module: nil,
             variables: nil,
             options: NimbleOptions.validate!([], @options_schema)
+
+  @doc """
+  Lists all the compiled formulas.
+  """
+  @spec formulas(include_internals? :: boolean()) :: %{optional(binary) => module()}
+  def formulas(include_internals? \\ false) do
+    host_modules = [
+      Formulae,
+      Formulae.Combinators,
+      Formulae.Combinators.H,
+      Formulae.Combinators.Stream,
+      Formulae.MixProject,
+      Formulae.RunnerError,
+      Formulae.Sigils,
+      Formulae.SyntaxError
+    ]
+
+    :code.all_loaded()
+    |> Enum.map(&elem(&1, 0))
+    |> Enum.filter(
+      &(&1 |> to_string() |> String.split(".") |> Enum.take(2) == ~w|Elixir Formulae|)
+    )
+    |> Kernel.--(host_modules)
+    |> Map.new(&{&1, Macro.to_string(&1.ast)})
+    |> then(fn result ->
+      if include_internals?, do: Map.merge(result, Map.new(host_modules, &{&1, &1})), else: result
+    end)
+  end
 
   @doc """
   Evaluates the formula returning the result back.
@@ -193,8 +218,10 @@ defmodule Formulae do
   @spec compiled?(binary() | Formulae.t(), options :: options()) :: boolean()
   def compiled?(input, options \\ [])
 
-  def compiled?(input, options) when is_binary(input) and is_list(options),
-    do: input |> module_name(options) |> Code.ensure_loaded?()
+  def compiled?(input, options) when is_binary(input) and is_list(options) do
+    module = module_name(input, options)
+    Map.get(formulas(true), module) == input and Code.ensure_loaded?(module)
+  end
 
   def compiled?(%Formulae{module: nil}, _), do: false
   def compiled?(%Formulae{module: _}, _), do: true
@@ -219,8 +246,22 @@ defmodule Formulae do
           | {:error, :embedded | :badfile | :nofile | :on_load_failure | :unavailable}
   def ensure_compiled(input, options \\ [])
 
-  def ensure_compiled(input, options) when is_binary(input) and is_list(options),
-    do: input |> module_name(options) |> Code.ensure_compiled()
+  def ensure_compiled(input, options) when is_binary(input) and is_list(options) do
+    module = module_name(input, options)
+
+    cond do
+      function_exported?(module, :ast, 0) ->
+        if Macro.to_string(module.ast()) == input,
+          do: {:module, module},
+          else: {:error, {:already_taken, module}}
+
+      Code.ensure_loaded?(module) ->
+        {:error, {:external_module, module}}
+
+      true ->
+        {:error, :nofile}
+    end
+  end
 
   def ensure_compiled(%Formulae{module: nil}, _), do: {:error, :unavailable}
   def ensure_compiled(%Formulae{module: module}, _), do: {:module, module}
@@ -325,6 +366,30 @@ defmodule Formulae do
       options: module.options(),
       eval: &module.eval/1
     }
+  end
+
+  defp maybe_create_module({:error, {:already_taken, module}}, input, options) do
+    IO.warn(
+      "Redefining Formulae for alias " <>
+        inspect(options[:alias]) <>
+        ", formula: ~F[#{Macro.to_string(module.ast())}] → ~F[#{input}] (module: " <>
+        inspect(module) <> ")",
+      []
+    )
+
+    maybe_create_module({:error, :redefining}, input, options)
+  end
+
+  defp maybe_create_module({:error, {:external_module, module}}, input, options) do
+    IO.warn(
+      "Alias given for Formulae (" <>
+        inspect(options[:alias]) <>
+        ") will overwrite existing module " <>
+        inspect(module),
+      []
+    )
+
+    maybe_create_module({:error, :redefining}, input, options)
   end
 
   defp maybe_create_module({:error, _}, input, options) do

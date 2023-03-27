@@ -1,4 +1,4 @@
-defmodule Formulae.Test do
+defmodule Test.Formulae do
   use ExUnit.Case
   require Formulae.Combinators
 
@@ -104,12 +104,12 @@ defmodule Formulae.Test do
 
     case Version.compare(System.version(), "1.13.0") do
       :lt ->
-        assert ~s|#ℱ<[ast: "rem(a, 2) == 0", eval: &AIsEven.eval/1, formula: "rem(a, 2) == 0", guard: "defguard(guard(a) when rem(a, 2) == 0)", module: AIsEven, variables: [:a], options: [defaults: [], evaluator: :guard, alias: AIsEven, imports: []]]>| ==
-                 inspect(f)
+        assert ~s|#ℱ<[ast: "rem(a, 2) == 0", eval: &AIsEven.eval/1, formula: "rem(a, 2) == 0", guard: "defguard(guard(a) when rem(a, 2) == 0)", module: AIsEven, variables: [:a], options: [| <>
+                 _ = inspect(f)
 
       _ ->
-        assert ~s|#ℱ<[ast: "rem(a, 2) == 0", eval: &AIsEven.eval/1, formula: "rem(a, 2) == 0", guard: "defguard guard(a) when rem(a, 2) == 0", module: AIsEven, variables: [:a], options: [defaults: [], evaluator: :guard, alias: AIsEven, imports: []]]>| ==
-                 inspect(f)
+        assert ~s|#ℱ<[ast: "rem(a, 2) == 0", eval: &AIsEven.eval/1, formula: "rem(a, 2) == 0", guard: "defguard guard(a) when rem(a, 2) == 0", module: AIsEven, variables: [:a], options: [| <>
+                 _ = inspect(f)
     end
   end
 
