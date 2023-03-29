@@ -243,7 +243,14 @@ defmodule Formulae do
   """
   @spec ensure_compiled(binary() | Formulae.t(), options :: options()) ::
           {:module, module()}
-          | {:error, :embedded | :badfile | :nofile | :on_load_failure | :unavailable}
+          | {:error,
+             :embedded
+             | :badfile
+             | :nofile
+             | :on_load_failure
+             | :unavailable
+             | {:already_taken, module()}
+             | {:external_module, module()}}
   def ensure_compiled(input, options \\ [])
 
   def ensure_compiled(input, options) when is_binary(input) and is_list(options) do
@@ -897,7 +904,7 @@ defmodule Formulae do
     imports = Keyword.fetch!(options, :imports)
 
     {^macro, {^imports, issues, variables}} =
-      Macro.prewalk(macro, {imports, [], []}, fn
+      Macro.postwalk(macro, {imports, [], []}, fn
         {var, _, nil} = v, {imports, issues, acc} ->
           {v, {imports, issues, [var | acc]}}
 
@@ -910,14 +917,14 @@ defmodule Formulae do
           if wanna_import in imports do
             {alias, {imports, issues, acc}}
           else
-            {alias, {imports, [wanna_import | issues], acc}}
+            {alias, {imports, [Macro.expand_literals(wanna_import, __ENV__) | issues], acc}}
           end
 
         {:., _, [wanna_import, _fun]} = alias, {imports, issues, acc} ->
           if wanna_import in imports do
             {alias, {imports, issues, acc}}
           else
-            {alias, {imports, [wanna_import | issues], acc}}
+            {alias, {imports, [Macro.expand_literals(wanna_import, __ENV__) | issues], acc}}
           end
 
         v, acc ->
@@ -925,7 +932,10 @@ defmodule Formulae do
       end)
 
     unless Enum.empty?(issues) do
-      raise %Formulae.SyntaxError{formula: input, error: {"Restricted imports", issues}}
+      raise %Formulae.SyntaxError{
+        formula: input,
+        error: "Restricted imports: " <> inspect(Enum.uniq(issues))
+      }
     end
 
     {macro, variables}
