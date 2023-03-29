@@ -427,6 +427,20 @@ defmodule Formulae do
       quote generated: true do
         @variables unquote(variables)
 
+        import Kernel,
+          except: [
+            apply: 3,
+            exit: 1,
+            raise: 1,
+            raise: 2,
+            reraise: 2,
+            reraise: 3,
+            spawn: 3,
+            spawn_link: 3,
+            spawn_monitor: 3,
+            throw: 1
+          ]
+
         unquote(imports)
 
         def ast, do: unquote(escaped)
@@ -781,6 +795,7 @@ defmodule Formulae do
     vars = Enum.map(variables, &Macro.var(&1, nil))
 
     quote generated: true do
+      # @doc guard: true
       defguard guard(unquote_splicing(vars)) when unquote(macro)
     end
   end
@@ -913,19 +928,13 @@ defmodule Formulae do
 
         {:__aliases__, _, [_ | _]} = alias, {imports, issues, acc} ->
           wanna_import = :elixir_aliases.expand_or_concat(alias, __ENV__)
-
-          if wanna_import in imports do
-            {alias, {imports, issues, acc}}
-          else
-            {alias, {imports, [Macro.expand_literals(wanna_import, __ENV__) | issues], acc}}
-          end
+          do_wanna_import(:alias, wanna_import, alias, {imports, issues, acc})
 
         {:., _, [wanna_import, _fun]} = alias, {imports, issues, acc} ->
-          if wanna_import in imports do
-            {alias, {imports, issues, acc}}
-          else
-            {alias, {imports, [Macro.expand_literals(wanna_import, __ENV__) | issues], acc}}
-          end
+          do_wanna_import(:erlang, wanna_import, alias, {imports, issues, acc})
+
+        {:import, _, wanna_import} = alias, {imports, issues, acc} ->
+          do_wanna_import(:import, wanna_import, alias, {imports, issues, acc})
 
         v, acc ->
           {v, acc}
@@ -934,11 +943,19 @@ defmodule Formulae do
     unless Enum.empty?(issues) do
       raise %Formulae.SyntaxError{
         formula: input,
-        error: "Restricted imports: " <> inspect(Enum.uniq(issues))
+        error: "Restricted: " <> inspect(Enum.uniq(issues))
       }
     end
 
     {macro, variables}
+  end
+
+  defp do_wanna_import(kind, wanna_import, alias, {imports, issues, acc}) do
+    if wanna_import in imports do
+      {alias, {imports, issues, acc}}
+    else
+      {alias, {imports, [{kind, Macro.expand_literals(wanna_import, __ENV__)} | issues], acc}}
+    end
   end
 
   defimpl String.Chars do
