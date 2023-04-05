@@ -356,9 +356,7 @@ defmodule Formulae do
   defp maybe_create_module({:module, module}, input, options) do
     with {:error, ex} <- validate_compatibility(module, options), do: raise(ex)
 
-    legacy_ast = Macro.to_string(module.ast())
-
-    unless input == legacy_ast do
+    unless Code.string_to_quoted(input) == module.ast() do
       raise Formulae.RunnerError,
         formula: input,
         error: {:incompatible, "Existing: " <> inspect(Macro.to_string(module.ast()))}
