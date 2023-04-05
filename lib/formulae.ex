@@ -276,6 +276,9 @@ defmodule Formulae do
   @doc """
   Compiles the formula into module.
 
+  The allowed imports must be specified explicitly with `imports: :all` or
+    a list of allowed imports `imports: [DateTime, Range]`.
+
   _Examples:_
 
       iex> f = Formulae.compile("rem(a, 5) - b == 0")
@@ -356,7 +359,7 @@ defmodule Formulae do
   defp maybe_create_module({:module, module}, input, options) do
     with {:error, ex} <- validate_compatibility(module, options), do: raise(ex)
 
-    unless Code.string_to_quoted(input) == module.ast() do
+    unless {:ok, module.ast()} == Code.string_to_quoted(input) do
       raise Formulae.RunnerError,
         formula: input,
         error: {:incompatible, "Existing: " <> inspect(Macro.to_string(module.ast()))}

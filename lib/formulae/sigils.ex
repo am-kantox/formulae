@@ -33,7 +33,10 @@ defmodule Formulae.Sigils do
       }
   """
 
-  @doc false
+  @doc """
+  Convenience sigil to declare `Formulae`. Maps to `Formulae.compile/2` with `imports: :none`
+    (or with `imports: :all` if the `a` modifier is given.)
+  """
   defmacro sigil_F({:<<>>, _, [binary]}, modifiers) when is_binary(binary) do
     eval = if ?g in modifiers, do: :guard, else: :function
     imports = if ?a in modifiers, do: :all, else: :none
