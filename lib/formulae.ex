@@ -258,7 +258,7 @@ defmodule Formulae do
 
     cond do
       function_exported?(module, :ast, 0) ->
-        if Macro.to_string(module.ast()) == input,
+        if {:ok, module.ast()} == Code.string_to_quoted(input),
           do: {:module, module},
           else: {:error, {:already_taken, module}}
 
