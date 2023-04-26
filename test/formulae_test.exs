@@ -102,15 +102,8 @@ defmodule Test.Formulae do
     f = Formulae.compile("rem(a, 2) == 0", alias: AIsEven, evaluator: :guard, imports: :none)
     assert "~F[rem(a, 2) == 0]" == "#{f}"
 
-    case Version.compare(System.version(), "1.13.0") do
-      :lt ->
-        assert ~s|#ℱ<[ast: "rem(a, 2) == 0", eval: &AIsEven.eval/1, formula: "rem(a, 2) == 0", guard: "defguard(guard(a) when rem(a, 2) == 0)", module: AIsEven, variables: [:a], options: [| <>
-                 _ = inspect(f)
-
-      _ ->
-        assert ~s|#ℱ<[ast: "rem(a, 2) == 0", eval: &AIsEven.eval/1, formula: "rem(a, 2) == 0", guard: "defguard guard(a) when rem(a, 2) == 0", module: AIsEven, variables: [:a], options: [| <>
-                 _ = inspect(f)
-    end
+    assert ~s|#ℱ<[sigil: "~F[rem(a, 2) == 0]", eval: &AIsEven.eval/1, formula: "rem(a, 2) == 0", guard: "defguard guard(a) when rem(a, 2) == 0", module: AIsEven, variables: [:a], options: [| <>
+             _ = inspect(f)
   end
 
   describe "curry" do

@@ -8,22 +8,15 @@ defmodule Formulae do
   ```elixir
   iex|1 ▶ f = Formulae.compile "a + :math.sin(3.14 * div(b, 2)) - c"
 
-  %Formulae{
-    ast: {:-, [line: 1],
-    [
-      {:+, [line: 1],
-        [
-          {:a, [line: 1], nil},
-          {{:., [line: 1], [:math, :sin]}, [line: 1],
-          [{:*, [line: 1], [3.14, {:div, [line: 1], [{:b, [line: 1], nil}, 2]}]}]}
-        ]},
-      {:c, [line: 1], nil}
-    ]},
+  #ℱ<[
+    sigil: "~F[a + :math.sin(3.14 * div(b, 2)) - c]",
     eval: &:"Elixir.Formulae.a + :math.sin(3.14 * div(b, 2)) - c".eval/1,
     formula: "a + :math.sin(3.14 * div(b, 2)) - c",
+    guard: nil,
     module: :"Elixir.Formulae.a + :math.sin(3.14 * div(b, 2)) - c",
-    variables: [:a, :b, :c]
-  }
+    variables: [:a, :b, :c],
+    options: [defaults: [], imports: [:...], evaluator: :function, alias: nil]
+  ]>
   ```
 
   Now the formula is compiled and might be invoked by calling `Formulae.eval/2`
@@ -39,13 +32,16 @@ defmodule Formulae do
 
   ```elixir
   iex|3 ▶ Formulae.curry(f, a: 3, b: 4)
-  %Formulae{
-    ast: ...,
+
+  #ℱ<[
+    sigil: "~F[3 + :math.sin(3.14 * div(4, 2)) - c]",
     eval: &:"Elixir.Formulae.3 + :math.sin(3.14 * div(4, 2)) - c".eval/1,
     formula: "3 + :math.sin(3.14 * div(4, 2)) - c",
+    guard: nil,
     module: :"Elixir.Formulae.3 + :math.sin(3.14 * div(4, 2)) - c",
-    variables: [:c]
-  }
+    variables: [:c],
+    options: [defaults: [], imports: [:...], evaluator: :function, alias: nil]
+  ]>
   ```
 
   Since `v0.10.0` there is an ability to pass `defaults` via `options`.
@@ -162,22 +158,28 @@ defmodule Formulae do
       true
       iex> Formulae.eval("rem(a, 5) == c", [a: 8, c: 3], defaults: [b: 3])
       true
+      iex> Formulae.eval("to_integer(s) == i", [s: "42", i: 42], imports: [String])
+      true
+
+  Binary input is deprecated, create a formula explicitly with `Formulae.compile/2`
+    and then pass it as the first argument to `eval/2`".
+
+  The call to `eval/3` would compile the formulae with default options.
   """
   @spec eval(input :: binary() | Formulae.t(), bindings :: keyword(), options :: options()) ::
           term() | {:error, any()}
   def eval(input, bindings \\ [], options \\ [imports: :none])
 
-  def eval(%Formulae{eval: eval, options: options}, bindings, _options),
-    do: options[:defaults] |> Keyword.merge(bindings) |> eval.()
+  def eval(%Formulae{eval: eval, options: options} = formula, bindings, _options) do
+    options[:defaults] |> Keyword.merge(bindings) |> eval.()
+  rescue
+    UndefinedFunctionError ->
+      eval(formula.formula, bindings, formula.options)
+  end
 
-  @doc deprecated: """
-       Create a formulae explicitly with `Formulae.compile/2`
-         and then pass it as the first argument to `eval/2`".
-
-       This call would compile the formulae with default options.
-       """
-  def eval(input, bindings, options) when is_binary(input),
-    do: input |> Formulae.compile(options) |> eval(bindings, options)
+  def eval(input, bindings, options) when is_binary(input) do
+    input |> Formulae.compile(options) |> eval(bindings, options)
+  end
 
   @doc """
   Evaluates the formula returning the result back; throws in a case of unseccessful processing.
@@ -975,7 +977,7 @@ defmodule Formulae do
         "~F[" <> f.formula <> "]"
       else
         inner = [
-          ast: Macro.to_string(f.ast),
+          sigil: "~F[" <> Macro.to_string(f.ast) <> "]",
           eval: f.eval,
           formula: f.formula,
           guard: if(f.guard, do: Macro.to_string(f.guard)),

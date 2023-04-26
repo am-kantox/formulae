@@ -15,7 +15,7 @@ end
 ```elixir
 iex|1 ▸ f = Formulae.compile("rem(a, 5) - b == 0")
 #ℱ<[
-  ast: "rem(a, 5) - b == 0",
+  sigil: "~F[rem(a, 5) - b == 0]",
   eval: &:"Elixir.Formulae.rem(a, 5) - b == 0".eval/1,
   formula: "rem(a, 5) - b == 0",
   guard: nil,
@@ -32,6 +32,7 @@ iex|4 ▸ f.module
 
 ## Changelog
 
+- **`0.11.4`** [FIX] reattempt to create module if not existing on `eval/3` call
 - **`0.11.2`** [FIX] restrict `apply/3`, `spawn/3`, and `import/2`
 - **`0.11.1`** [FIX] `Formulae.formulas/1` + aliases are handled more naturally
 - **`0.11.0`** `v1.0.0` pre-release
