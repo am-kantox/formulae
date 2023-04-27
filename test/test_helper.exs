@@ -15,4 +15,9 @@ Formulae.compile("a1 == 0 and a2 == 0 and a3 == 0 and a4 == 0 and a5 == 0 and a6
   imports: :none
 )
 
+defmodule A.B.C.D do
+  @moduledoc false
+  def foo, do: 42
+end
+
 ExUnit.start()

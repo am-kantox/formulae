@@ -80,7 +80,7 @@ defmodule Formulae do
                       required: false,
                       default: nil,
                       doc: "The list of modules to allow remote calls from, or `:all | :none`",
-                      type: {:or, [{:in, [nil, :none, :all]}, {:list, :atom}, :atom]}
+                      type: {:or, [{:in, [nil, :none, :all]}, {:list, :any}, :atom]}
                     ],
                     defaults: [
                       required: false,
@@ -412,7 +412,7 @@ defmodule Formulae do
       case Keyword.fetch!(options, :imports) do
         [] -> nil
         [:...] -> nil
-        imports -> quote do: import(unquote_splicing(imports))
+        imports -> Enum.map(imports, &quote(do: import(unquote_splicing(List.wrap(&1)))))
       end
 
     {macro, variables} = reduce_ast!(input, options)
@@ -454,7 +454,7 @@ defmodule Formulae do
       eval
     ]
 
-    {:module, module, _, _} = Module.create(module_name(input, options), ast, __ENV__)
+    {:module, module, _, _} = input |> module_name(options) |> Module.create(ast, __ENV__)
 
     %Formulae{
       formula: input,
@@ -933,8 +933,12 @@ defmodule Formulae do
           wanna_import = :elixir_aliases.expand_or_concat(alias, __ENV__)
           do_wanna_import(:alias, wanna_import, alias, {imports, issues, acc})
 
-        {:., _, [wanna_import, _fun]} = alias, {imports, issues, acc} ->
-          do_wanna_import(:erlang, wanna_import, alias, {imports, issues, acc})
+        {:., _, [{:__aliases__, _, [_ | _]} = alias, _fun]} = call, {imports, issues, acc} ->
+          wanna_import = :elixir_aliases.expand_or_concat(alias, __ENV__)
+          do_wanna_import(:alias, wanna_import, call, {imports, issues, acc})
+
+        {:., _, [wanna_import, _fun]} = call, {imports, issues, acc} ->
+          do_wanna_import(:erlang, wanna_import, call, {imports, issues, acc})
 
         {:import, _, wanna_import} = alias, {imports, issues, acc} ->
           do_wanna_import(:import, wanna_import, alias, {imports, issues, acc})

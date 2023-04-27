@@ -144,4 +144,42 @@ defmodule Test.Formulae do
       assert SumA == f.module
     end
   end
+
+  describe "imports" do
+    test "works without imports" do
+      f = Formulae.compile("2 + 1", imports: :none)
+      assert 3 == Formulae.eval(f, [])
+    end
+
+    test "raises without imports" do
+      assert_raise Formulae.SyntaxError,
+                   ~S|Formula ~F[:math.pi() + 1] syntax is incorrect ("Restricted: [erlang: :math]")|,
+                   fn -> Formulae.compile(":math.pi() + 1", imports: :none) end
+    end
+
+    test "works with erlang imports" do
+      f = Formulae.compile(":math.pi() + 2", imports: [:math])
+      assert Formulae.eval(f, []) > 5
+    end
+
+    test "works with elixir imports (fqn)" do
+      f = Formulae.compile("A.B.C.D.foo() + 2", imports: [A.B.C.D])
+      assert Formulae.eval(f, []) == 44
+    end
+
+    test "works with elixir imports (non-fqn)" do
+      f = Formulae.compile("foo() + a", imports: [A.B.C.D])
+      assert Formulae.eval(f, [a: -41]) == 1
+    end
+
+    test "works with mixed imports" do
+      f = Formulae.compile("pi() + A.B.C.D.foo() + a", imports: [:math, A.B.C.D])
+      assert_in_delta Formulae.eval(f, [a: -42]), :math.pi(), 0.01
+    end
+
+    test "works with selective imports" do
+      f = Formulae.compile("pi() + A.B.C.D.foo() + a", imports: [[:math, [[only: [pi: 0]]]], A.B.C.D])
+      assert_in_delta Formulae.eval(f, [a: -42]), :math.pi(), 0.01
+    end
+  end
 end
