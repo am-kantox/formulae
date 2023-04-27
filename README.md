@@ -32,6 +32,7 @@ iex|4 ▸ f.module
 
 ## Changelog
 
+- **`0.11.6`** improve syntax for imports with arguments, accept `{:math, only: [pi: 0]}`
 - **`0.11.5`** [FIX] elixir nested aliases + [FEAT] accept `except:` and `only:` for imports
 - **`0.11.4`** [FIX] reattempt to create module if not existing on `eval/3` call
 - **`0.11.2`** [FIX] restrict `apply/3`, `spawn/3`, and `import/2`

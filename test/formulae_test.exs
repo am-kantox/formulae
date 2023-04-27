@@ -177,13 +177,36 @@ defmodule Test.Formulae do
       assert_in_delta Formulae.eval(f, a: -42), :math.pi(), 0.01
     end
 
+    test "works with all imports" do
+      f = Formulae.compile(":math.pi() + A.B.C.D.foo() + b", imports: :all)
+      assert_in_delta Formulae.eval(f, b: -42), :math.pi(), 0.01
+    end
+
     test "works with selective imports" do
       f =
-        Formulae.compile("pi() + A.B.C.D.foo() + a",
+        Formulae.compile("pi() + A.B.C.D.foo() + c",
           imports: [[:math, [[only: [pi: 0]]]], A.B.C.D]
         )
 
-      assert_in_delta Formulae.eval(f, a: -42), :math.pi(), 0.01
+      assert_in_delta Formulae.eval(f, c: -42), :math.pi(), 0.01
+    end
+
+    test "works with selective imports (friendly syntax)" do
+      f =
+        Formulae.compile("pi() + A.B.C.D.foo() + d",
+          imports: [[:math, only: [pi: 0]], A.B.C.D]
+        )
+
+      assert_in_delta Formulae.eval(f, d: -42), :math.pi(), 0.01
+    end
+
+    test "works with selective imports (friendly syntax, tuple)" do
+      f =
+        Formulae.compile("pi() + A.B.C.D.foo() + e",
+          imports: [{:math, only: [pi: 0]}, A.B.C.D]
+        )
+
+      assert_in_delta Formulae.eval(f, e: -42), :math.pi(), 0.01
     end
   end
 end
