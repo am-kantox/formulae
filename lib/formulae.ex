@@ -961,7 +961,11 @@ defmodule Formulae do
     if wanna_import in imports do
       {alias, {imports, issues, acc}}
     else
-      {alias, {imports, [{kind, Macro.expand_literals(wanna_import, __ENV__)} | issues], acc}}
+      if Version.match?(System.version(), ">= 1.14.1") do
+        {alias, {imports, [{kind, Macro.expand_literals(wanna_import, __ENV__)} | issues], acc}}
+      else
+        {alias, {imports, [{kind, wanna_import} | issues], acc}}
+      end
     end
   end
 
