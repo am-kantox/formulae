@@ -169,17 +169,21 @@ defmodule Test.Formulae do
 
     test "works with elixir imports (non-fqn)" do
       f = Formulae.compile("foo() + a", imports: [A.B.C.D])
-      assert Formulae.eval(f, [a: -41]) == 1
+      assert Formulae.eval(f, a: -41) == 1
     end
 
     test "works with mixed imports" do
       f = Formulae.compile("pi() + A.B.C.D.foo() + a", imports: [:math, A.B.C.D])
-      assert_in_delta Formulae.eval(f, [a: -42]), :math.pi(), 0.01
+      assert_in_delta Formulae.eval(f, a: -42), :math.pi(), 0.01
     end
 
     test "works with selective imports" do
-      f = Formulae.compile("pi() + A.B.C.D.foo() + a", imports: [[:math, [[only: [pi: 0]]]], A.B.C.D])
-      assert_in_delta Formulae.eval(f, [a: -42]), :math.pi(), 0.01
+      f =
+        Formulae.compile("pi() + A.B.C.D.foo() + a",
+          imports: [[:math, [[only: [pi: 0]]]], A.B.C.D]
+        )
+
+      assert_in_delta Formulae.eval(f, a: -42), :math.pi(), 0.01
     end
   end
 end
