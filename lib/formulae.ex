@@ -58,7 +58,7 @@ defmodule Formulae do
   @type option ::
           {:eval, :function | :guard}
           | {:alias, module()}
-          | {:imports, :none | :all | [module()]}
+          | {:imports, :none | :all | [module()] | [{module(), keyword()}] | [list()]}
           | {:defaults, keyword()}
   @typedoc false
   @type options :: [option()]
