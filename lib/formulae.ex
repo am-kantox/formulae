@@ -419,7 +419,7 @@ defmodule Formulae do
         imports ->
           Enum.map(imports, fn
             [mod, {_, _} = arg] -> quote do: import(unquote(mod), unquote([arg]))
-            {mod, [{_, _} |_] = args} -> quote do: import(unquote(mod), unquote(args))
+            {mod, [{_, _} | _] = args} -> quote do: import(unquote(mod), unquote(args))
             mod -> quote do: import(unquote_splicing(List.wrap(mod)))
           end)
       end
