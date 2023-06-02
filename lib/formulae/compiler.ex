@@ -27,6 +27,8 @@ defmodule Formulae.Compiler do
 
   defstruct payload: nil, formulas: %{}
 
+  require Logger
+
   case {Application.compile_env(:formulae, :compiler), Code.ensure_compiled(Finitomata)} do
     {:finitomata, {:module, Finitomata}} ->
       @fsm """
@@ -219,8 +221,13 @@ defmodule Formulae.Compiler do
 
       def handle_cast({:compile, {formula, options}}, %__MODULE__{formulas: formulas} = state)
           when is_binary(formula) do
-        compiled = Formulae.compile(formula, options)
-        {:noreply, %__MODULE__{state | formulas: Map.put(formulas, formula, compiled)}}
+        case safe_compile(formula, options) do
+          :ok ->
+            {:noreply, state}
+
+          compiled ->
+            {:noreply, %__MODULE__{state | formulas: Map.put(formulas, formula, compiled)}}
+        end
       end
   end
 
@@ -228,5 +235,18 @@ defmodule Formulae.Compiler do
     for {mod, formula} <- Formulae.formulas(), into: %{} do
       {formula, Formulae.compile(formula, mod.options)}
     end
+  end
+
+  defp safe_compile(formula, options) do
+    Formulae.compile(formula, options)
+  rescue
+    error in [CompileError] ->
+      Logger.error("Wrong syntax in formula: ‹" <> error.description <> "›")
+
+    error in [Formulae.SyntaxError] ->
+      Logger.error("Restricted call in formula: ‹" <> Exception.message(error) <> "›")
+
+    error ->
+      Logger.error("Unknown formula error in formula: ‹" <> Exception.message(error) <> "›")
   end
 end

@@ -8,7 +8,7 @@ defmodule Test.Formulae.Compiler do
   describe "with finitomata" do
     @tag :finitomata
     test "works as expected" do
-      start_link_supervised!({Finitomata.Supervisor, id: Sup1})
+      start_supervised!({Finitomata.Supervisor, id: Sup1})
       Finitomata.start_fsm(Sup1, Compiler, Compiler, nil)
 
       assert :ok == Compiler.compile(Sup1, Compiler, "a / 2", imports: :none)
@@ -21,7 +21,7 @@ defmodule Test.Formulae.Compiler do
 
     @tag :finitomata
     test "works under stress" do
-      start_link_supervised!({Finitomata.Supervisor, id: Sup2})
+      start_supervised!({Finitomata.Supervisor, id: Sup2})
       Finitomata.start_fsm(Sup2, Compiler, Compiler, nil)
 
       1..1_000
@@ -42,7 +42,7 @@ defmodule Test.Formulae.Compiler do
 
   describe "with plain gen_server" do
     test "works as expected" do
-      start_link_supervised!(Formulae.Compiler)
+      start_supervised!(Formulae.Compiler)
 
       assert :ok == Compiler.compile(nil, Compiler, "a / 2", imports: :none)
       assert 1.0 == Compiler.eval(nil, Compiler, "a / 2", a: 2)
@@ -53,7 +53,7 @@ defmodule Test.Formulae.Compiler do
     end
 
     test "works under stress" do
-      start_link_supervised!(Formulae.Compiler)
+      start_supervised!(Formulae.Compiler)
 
       1..1_000
       |> Task.async_stream(
