@@ -229,24 +229,24 @@ defmodule Formulae.Compiler do
             {:noreply, %__MODULE__{state | formulas: Map.put(formulas, formula, compiled)}}
         end
       end
+
+      defp safe_compile(formula, options) do
+        Formulae.compile(formula, options)
+      rescue
+        error in [CompileError] ->
+          Logger.error("Wrong syntax in formula: ‹" <> error.description <> "›")
+
+        error in [Formulae.SyntaxError] ->
+          Logger.error("Restricted call in formula: ‹" <> Exception.message(error) <> "›")
+
+        error ->
+          Logger.error("Unknown formula error in formula: ‹" <> Exception.message(error) <> "›")
+      end
   end
 
   defp collect_existing do
     for {mod, formula} <- Formulae.formulas(), into: %{} do
       {formula, Formulae.compile(formula, mod.options)}
     end
-  end
-
-  defp safe_compile(formula, options) do
-    Formulae.compile(formula, options)
-  rescue
-    error in [CompileError] ->
-      Logger.error("Wrong syntax in formula: ‹" <> error.description <> "›")
-
-    error in [Formulae.SyntaxError] ->
-      Logger.error("Restricted call in formula: ‹" <> Exception.message(error) <> "›")
-
-    error ->
-      Logger.error("Unknown formula error in formula: ‹" <> Exception.message(error) <> "›")
   end
 end
