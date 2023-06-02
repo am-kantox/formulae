@@ -20,4 +20,4 @@ defmodule A.B.C.D do
   def foo, do: 42
 end
 
-ExUnit.start()
+ExUnit.start(exclude: :finitomata)

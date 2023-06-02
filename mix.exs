@@ -16,10 +16,10 @@ defmodule Formulae.MixProject do
       aliases: aliases(),
       deps: deps(),
       docs: docs(),
-      xref: [exclude: [NimbleOptions]],
+      xref: [exclude: [NimbleOptions, Finitomata, Finitomata.Hook, Finitomata.Transition]],
       dialyzer: [
         plt_file: {:no_warn, ".dialyzer/plts/dialyzer.plt"},
-        plt_add_apps: [:nimble_options],
+        plt_add_apps: [:nimble_options, :finitomata],
         ignore_warnings: ".dialyzer/ignore.exs"
       ]
     ]
@@ -35,6 +35,7 @@ defmodule Formulae.MixProject do
   defp deps do
     [
       {:nimble_options, "~> 0.3 or ~> 1.0"},
+      {:finitomata, "~> 0.14", optional: true},
       {:benchfella, "~> 0.3", only: [:dev]},
       {:dialyxir, "~> 1.0", only: [:dev, :ci], runtime: false},
       {:credo, "~> 1.0", only: [:dev, :ci]},

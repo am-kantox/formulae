@@ -125,6 +125,7 @@ defmodule Formulae do
       Formulae.Combinators,
       Formulae.Combinators.H,
       Formulae.Combinators.Stream,
+      Formulae.Compiler,
       Formulae.MixProject,
       Formulae.RunnerError,
       Formulae.Sigils,
@@ -133,9 +134,7 @@ defmodule Formulae do
 
     :code.all_loaded()
     |> Enum.map(&elem(&1, 0))
-    |> Enum.filter(
-      &(&1 |> to_string() |> String.split(".") |> Enum.take(2) == ~w|Elixir Formulae|)
-    )
+    |> Enum.filter(&match?("Elixir.Formulae." <> _, to_string(&1)))
     |> Kernel.--(host_modules)
     |> Map.new(&{&1, Macro.to_string(&1.ast)})
     |> then(fn result ->
