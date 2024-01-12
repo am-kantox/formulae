@@ -11,6 +11,8 @@ defmodule Formulae.MixProject do
       elixir: "~> 1.11",
       # compilers: [:finitomata | Mix.compilers()],
       compilers: Mix.compilers(),
+      prune_code_paths: Mix.env() == :prod,
+      preferred_cli_env: [{:"quality.ci", :ci}],
       build_embedded: Mix.env() == :prod,
       start_permanent: Mix.env() == :prod,
       description: description(),
@@ -18,7 +20,7 @@ defmodule Formulae.MixProject do
       aliases: aliases(),
       deps: deps(),
       docs: docs(),
-      xref: [exclude: [NimbleOptions, Finitomata, Finitomata.Hook, Finitomata.Transition]],
+      xref: [exclude: []],
       dialyzer: [
         plt_file: {:no_warn, ".dialyzer/plts/dialyzer.plt"},
         plt_add_apps: [:nimble_options, :finitomata],

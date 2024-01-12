@@ -23,4 +23,9 @@ erl_crash.dump
 
 /.dialyzer/plts/*.plt*
 
+/.elixir-tools/
+/.tool-versions
+/lv-settings.lua
+
+
 /bench/snapshots/

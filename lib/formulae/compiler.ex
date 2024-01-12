@@ -28,6 +28,7 @@ defmodule Formulae.Compiler do
   defstruct payload: nil, formulas: %{}
 
   require Logger
+  Code.ensure_compiled!(Finitomata)
 
   case Application.compile_env(:formulae, :compiler) do
     :finitomata ->
