@@ -2,13 +2,14 @@ defmodule Formulae.MixProject do
   use Mix.Project
 
   @app :formulae
-  @version "0.12.1"
+  @version "0.13.0"
 
   def project do
     [
       app: @app,
       version: @version,
       elixir: "~> 1.11",
+      compilers: [:finitomata | Mix.compilers()],
       build_embedded: Mix.env() == :prod,
       start_permanent: Mix.env() == :prod,
       description: description(),

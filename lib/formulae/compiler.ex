@@ -29,8 +29,8 @@ defmodule Formulae.Compiler do
 
   require Logger
 
-  case {Application.compile_env(:formulae, :compiler), Code.ensure_compiled(Finitomata)} do
-    {:finitomata, {:module, Finitomata}} ->
+  case Application.compile_env(:formulae, :compiler) do
+    :finitomata ->
       @fsm """
       idle --> |start!| active
       active --> |compile| active
