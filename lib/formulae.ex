@@ -126,6 +126,7 @@ defmodule Formulae do
       Formulae.Combinators.H,
       Formulae.Combinators.Stream,
       Formulae.Compiler,
+      Formulae.Compiler.AST,
       Formulae.MixProject,
       Formulae.RunnerError,
       Formulae.Sigils,
