@@ -1,6 +1,9 @@
 defmodule Formulae.Compiler.AST do
-  case {Code.ensure_loaded?(Finitomata), Application.compile_env(:formulae, :compiler)} do
-    {true, :finitomata} ->
+  @moduledoc false
+
+  # credo:disable-for-this-file Credo.Check.Refactor.CyclomaticComplexity
+  case Application.compile_env(:formulae, :compiler) do
+    :finitomata ->
       defmacro ast do
         quote do
           @fsm """

@@ -32,6 +32,7 @@ iex|4 ▸ f.module
 
 ## Changelog
 
+- **`0.14.0`** [UPD] Fully optional `Finitomata`, configurable through `config :formulae, compiler: :finitomata`
 - **`0.13.0`** [UPD] Elixir v1.16, modern libs
 - **`0.12.0`** [ENH] `Formulae.Compiler` to avoid compilation glitches in highly concurrent environment
 - **`0.11.7`** make dialyzer happy with new `:imports` formats
