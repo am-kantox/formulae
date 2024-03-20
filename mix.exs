@@ -39,7 +39,7 @@ defmodule Formulae.MixProject do
   defp deps do
     [
       {:nimble_options, "~> 0.3 or ~> 1.0"},
-      {:finitomata, "~> 0.14", optional: true},
+      # {:finitomata, "~> 0.14", optional: true},
       {:benchfella, "~> 0.3", only: [:dev]},
       {:dialyxir, "~> 1.0", only: [:dev, :ci], runtime: false},
       {:credo, "~> 1.0", only: [:dev, :ci]},
