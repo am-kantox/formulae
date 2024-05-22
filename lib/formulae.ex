@@ -926,6 +926,17 @@ defmodule Formulae do
   # [AM] maybe warn
   defp validate_evaluator(_, module), do: not is_nil(module.guard_ast())
 
+  if Version.match?(System.version(), ">= 1.17.0-dev") do
+    defp expand_or_concat(alias) do
+      {:__aliases__, meta, [_ | _] = list} = alias
+      :elixir_aliases.expand_or_concat(meta, list, __ENV__, nil)
+    end
+  else
+    defp expand_or_concat(alias) do
+      :elixir_aliases.expand_or_concat(alias, __ENV__)
+    end
+  end
+
   defp reduce_ast!(input, options) do
     macro = Code.string_to_quoted!(input)
     imports = Keyword.fetch!(options, :imports)
@@ -939,11 +950,11 @@ defmodule Formulae do
           {v, acc}
 
         {:__aliases__, _, [_ | _]} = alias, {imports, issues, acc} ->
-          wanna_import = :elixir_aliases.expand_or_concat(alias, __ENV__)
+          wanna_import = expand_or_concat(alias)
           do_wanna_import(:alias, wanna_import, alias, {imports, issues, acc})
 
         {:., _, [{:__aliases__, _, [_ | _]} = alias, _fun]} = call, {imports, issues, acc} ->
-          wanna_import = :elixir_aliases.expand_or_concat(alias, __ENV__)
+          wanna_import = expand_or_concat(alias)
           do_wanna_import(:alias, wanna_import, call, {imports, issues, acc})
 
         {:., _, [wanna_import, _fun]} = call, {imports, issues, acc} ->

@@ -120,9 +120,7 @@ defmodule Formulae.Compiler.AST do
             {:ok, %__MODULE__{state | formulas: formulas}}
           end
 
-          @spec formulas(id :: Finitomata.id(), name :: Finitomata.fsm_name()) :: %{
-                  optional(binary()) => Formulae.t()
-                }
+          @spec formulas(id :: term(), name :: term()) :: %{optional(binary()) => Formulae.t()}
           @doc """
           Returns all the compiled `Formulae` modules known to the system.
           """
@@ -132,12 +130,8 @@ defmodule Formulae.Compiler.AST do
           def formulas(id, name),
             do: GenServer.call({:via, Registry, {id, name}}, :state).formulas
 
-          @spec compile(
-                  id :: Finitomata.id(),
-                  name :: Finitomata.fsm_name(),
-                  formula :: binary(),
-                  options :: keyword()
-                ) :: :ok
+          @spec compile(id :: term(), name :: term(), formula :: binary(), options :: keyword()) ::
+                  :ok
           @doc """
           Compiles a formula if it has not yet been compiled, otherwise it’s a noop.
           """
