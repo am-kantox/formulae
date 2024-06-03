@@ -5,6 +5,8 @@ defmodule Formulae.Compiler.AST do
   case Application.compile_env(:formulae, :compiler) do
     :finitomata ->
       defmacro ast do
+        Code.ensure_compiled!(Finitomata)
+
         quote do
           @fsm """
           idle --> |start!| active
