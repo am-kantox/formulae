@@ -137,7 +137,7 @@ defmodule Formulae do
     |> Enum.map(&elem(&1, 0))
     |> Enum.filter(&match?("Elixir.Formulae." <> _, to_string(&1)))
     |> Kernel.--(host_modules)
-    |> Map.new(&{&1, Macro.to_string(&1.ast)})
+    |> Map.new(&{&1, Macro.to_string(&1.ast())})
     |> then(fn result ->
       if include_internals?, do: Map.merge(result, Map.new(host_modules, &{&1, &1})), else: result
     end)
@@ -887,10 +887,10 @@ defmodule Formulae do
   defp validate_compatibility(module, options) do
     with {:ok, validated} <- NimbleOptions.validate(options, @options_schema),
          {:imports, true} <-
-           {:imports, validate_imports(module.options[:imports], validated[:imports])},
+           {:imports, validate_imports(module.options()[:imports], validated[:imports])},
          {:alias, true} <- {:alias, module == Keyword.get(validated, :alias, module)},
          {:defaults, true} <-
-           {:defaults, Keyword.equal?(module.options[:defaults], validated[:defaults])},
+           {:defaults, Keyword.equal?(module.options()[:defaults], validated[:defaults])},
          {:evaluator, true} <- {:evaluator, validate_evaluator(validated[:evaluator], module)} do
       {:ok, validated}
     end

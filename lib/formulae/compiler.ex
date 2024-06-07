@@ -34,7 +34,7 @@ defmodule Formulae.Compiler do
 
   defp collect_existing do
     for {mod, formula} <- Formulae.formulas(), into: %{} do
-      {formula, Formulae.compile(formula, mod.options)}
+      {formula, Formulae.compile(formula, mod.options())}
     end
   end
 end
