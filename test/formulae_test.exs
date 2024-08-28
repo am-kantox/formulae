@@ -209,4 +209,27 @@ defmodule Test.Formulae do
       assert_in_delta Formulae.eval(f, e: -42), :math.pi(), 0.01
     end
   end
+
+  describe "unexpected input" do
+    test "long input https://www.erlang.org/doc/system/memory.html#system-limits" do
+      defmodule Helper do
+        def timestamp(datetime) do
+          DateTime.to_unix(datetime)
+        end
+      end
+
+      input = """
+      # Some comment to indicate that if this string is too long it will error out
+      # Some comment to indicate that if this string is too long it will error out
+      # Some comment to indicate that if this string is too long it will error out
+      # Some comment to indicate that if this string is too long it will error out
+
+      timestamp(start) && timestamp(start)
+      """
+
+      formula = Formulae.compile(input, imports: [Helper])
+      now = DateTime.utc_now()
+      assert DateTime.to_unix(now) == Formulae.eval!(formula, start: now)
+    end
+  end
 end

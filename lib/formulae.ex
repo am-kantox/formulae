@@ -203,6 +203,24 @@ defmodule Formulae do
     end
   end
 
+  @spec dry_ast(binary() | {:ok, Macro.t()} | {:error, tuple()} | Macro.t()) ::
+          {:ok, Macro.t()} | {:error, tuple()}
+  defp dry_ast(input) when is_binary(input), do: input |> Code.string_to_quoted() |> dry_ast()
+
+  defp dry_ast({:error, _} = error), do: error
+
+  defp dry_ast({:ok, input}) when is_tuple(input) do
+    result =
+      Macro.prewalk(input, fn
+        {arg, [_ | _], content} -> {arg, [], content}
+        other -> other
+      end)
+
+    {:ok, result}
+  end
+
+  defp dry_ast(input) when is_tuple(input), do: dry_ast({:ok, input})
+
   @doc """
   Checks whether the formula was already compiled into module.
 
@@ -222,7 +240,11 @@ defmodule Formulae do
 
   def compiled?(input, options) when is_binary(input) and is_list(options) do
     module = module_name(input, options)
-    Map.get(formulas(true), module) == input and Code.ensure_loaded?(module)
+    sanitized = Map.get(formulas(true), module)
+
+    is_binary(sanitized) and
+      match?([{:ok, quoted}, {:ok, quoted}], Enum.map([sanitized, input], &dry_ast/1)) and
+      Code.ensure_loaded?(module)
   end
 
   def compiled?(%Formulae{module: nil}, _), do: false
@@ -800,7 +822,16 @@ defmodule Formulae do
   defp double_quote(string), do: double_quote(to_string(string))
 
   defp module_name(input, options) when is_binary(input) and is_list(options) do
-    Keyword.get(options, :alias) || Module.concat(Formulae, String.replace(input, <<?/>>, "÷"))
+    safe_name =
+      case input do
+        <<_::binary-size(240), _::binary>> ->
+          "SHA_" <> (:sha256 |> :crypto.hash(input) |> Base.encode16())
+
+        _ ->
+          String.replace(input, <<?/>>, "÷")
+      end
+
+    Keyword.get(options, :alias) || Module.concat(Formulae, safe_name)
   end
 
   defp do_guard(:guard, variables, macro, _input) do
