@@ -28,10 +28,19 @@ defmodule Formulae do
   0.9968146982068622
   ```
 
+  Whether one needs to use external modules in formulas, these modules
+  must be explicitly imported via `imports: [Mod1, Mod2]`. In case of clash
+  against `Kernel` functions, the latter might be “unimported” explicitly.
+
+  ```elixir
+  iex|3 ▶ Formulae.compile("div(100, 2)", imports: [Decimal], unimports: [div: 2])
+  Decimal.new("50")
+  ```
+
   The formulae might be curried.
 
   ```elixir
-  iex|3 ▶ Formulae.curry(f, a: 3, b: 4)
+  iex|4 ▶ Formulae.curry(f, a: 3, b: 4)
 
   #ℱ<[
     sigil: "~F[3 + :math.sin(3.14 * div(4, 2)) - c]",
@@ -81,6 +90,13 @@ defmodule Formulae do
                       default: nil,
                       doc: "The list of modules to allow remote calls from, or `:all | :none`",
                       type: {:or, [{:in, [nil, :none, :all]}, {:list, :any}, :atom]}
+                    ],
+                    unimports: [
+                      required: false,
+                      default: [],
+                      doc:
+                        "The list of functions from `Kernel` module to *not* import automatically",
+                      type: {:or, [{:in, [nil, :none, :all]}, :keyword_list]}
                     ],
                     defaults: [
                       required: false,
@@ -424,6 +440,7 @@ defmodule Formulae do
     maybe_create_module({:error, :redefining}, input, options)
   end
 
+  # credo:disable-for-next-line Credo.Check.Refactor.CyclomaticComplexity
   defp maybe_create_module({:error, _}, input, options) do
     options =
       options
@@ -446,6 +463,31 @@ defmodule Formulae do
           end)
       end
 
+    unimports =
+      case Keyword.fetch!(options, :unimports) do
+        nil -> []
+        :none -> []
+        :all -> Kernel.__info__(:functions)
+        list when is_list(list) -> list
+      end
+
+    unimports =
+      Enum.uniq(
+        unimports ++
+          [
+            apply: 3,
+            exit: 1,
+            raise: 1,
+            raise: 2,
+            reraise: 2,
+            reraise: 3,
+            spawn: 3,
+            spawn_link: 3,
+            spawn_monitor: 3,
+            throw: 1
+          ]
+      )
+
     {macro, variables} = reduce_ast!(input, options)
 
     escaped = Macro.escape(macro)
@@ -461,20 +503,7 @@ defmodule Formulae do
       quote generated: true do
         @variables unquote(variables)
 
-        import Kernel,
-          except: [
-            apply: 3,
-            exit: 1,
-            raise: 1,
-            raise: 2,
-            reraise: 2,
-            reraise: 3,
-            spawn: 3,
-            spawn_link: 3,
-            spawn_monitor: 3,
-            throw: 1
-          ]
-
+        import Kernel, except: unquote(unimports)
         unquote(imports)
 
         def ast, do: unquote(escaped)

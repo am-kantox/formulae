@@ -20,4 +20,8 @@ defmodule A.B.C.D do
   def foo, do: 42
 end
 
+defmodule Clashing do
+  def div(a, b), do: a / b
+end
+
 ExUnit.start(exclude: :finitomata)

@@ -208,6 +208,12 @@ defmodule Test.Formulae do
 
       assert_in_delta Formulae.eval(f, e: -42), :math.pi(), 0.01
     end
+
+    test "works with unimports" do
+      f = Formulae.compile("div(100, d)", imports: [Clashing], unimports: [div: 2])
+
+      assert_in_delta Formulae.eval(f, d: 10), 10, 0.01
+    end
   end
 
   describe "unexpected input" do

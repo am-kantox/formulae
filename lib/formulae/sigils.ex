@@ -15,7 +15,7 @@ defmodule Formulae.Sigils do
         guard: nil,
         module: :"Elixir.Formulae.x ÷ y > 42",
         variables: [:x, :y],
-        options: [defaults: [], alias: nil, evaluator: :function, imports: []]
+        options: [defaults: [], unimports: [], alias: nil, evaluator: :function, imports: []]
       }
       iex> ~F[x == y]ga
       %Formulae{
@@ -29,7 +29,7 @@ defmodule Formulae.Sigils do
         },
         module: :"Elixir.Formulae.x == y",
         variables: [:x, :y],
-        options: [defaults: [], alias: nil, evaluator: :guard, imports: [:...]]
+        options: [defaults: [], unimports: [], alias: nil, evaluator: :guard, imports: [:...]]
       }
   """
 
