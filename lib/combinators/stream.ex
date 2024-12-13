@@ -69,7 +69,7 @@ defmodule Formulae.Combinators.Stream do
   @spec combinations(list :: list(), count :: non_neg_integer()) :: {stream(), :ok}
 
   defmacro combinations(l, n) do
-    Enum.reduce(n..1, {[mapper(1, n, &var/1)], :ok}, fn i, body ->
+    Enum.reduce(n..1//-1, {[mapper(1, n, &var/1)], :ok}, fn i, body ->
       stream_combination_transform_clause(i, l, body)
     end)
   end
@@ -83,7 +83,7 @@ defmodule Formulae.Combinators.Stream do
   @spec permutations(list :: list(), count :: non_neg_integer()) :: {stream(), :ok}
 
   defmacro permutations(l, n) do
-    Enum.reduce(n..1, {[mapper(1, n, &var/1)], :ok}, fn i, body ->
+    Enum.reduce(n..1//-1, {[mapper(1, n, &var/1)], :ok}, fn i, body ->
       stream_permutation_transform_clause(i, l, body)
     end)
   end
@@ -97,7 +97,7 @@ defmodule Formulae.Combinators.Stream do
   @spec repeated_permutations(list :: list(), count :: non_neg_integer()) :: {stream(), :ok}
 
   defmacro repeated_permutations(l, n) do
-    Enum.reduce(n..1, {[mapper(1, n, &var/1)], :ok}, fn i, body ->
+    Enum.reduce(n..1//-1, {[mapper(1, n, &var/1)], :ok}, fn i, body ->
       stream_transform_clause(i, l, body)
     end)
   end

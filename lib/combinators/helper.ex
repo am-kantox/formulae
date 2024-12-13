@@ -59,7 +59,7 @@ defmodule Formulae.Combinators.H do
   def sink_permutation_clauses(i, body) when i > 1 do
     Enum.reverse([
       {:->, [], [[{var(i), idx(i)}, :ok], body]}
-      | Enum.map((i - 1)..1, &sink_permutation_clause/1)
+      | Enum.map((i - 1)..1//-1, &sink_permutation_clause/1)
     ])
   end
 
@@ -88,6 +88,9 @@ defmodule Formulae.Combinators.H do
       ]}, :ok}
   end
 
+  defmacro mapper(from, to, fun) when from <= to,
+    do: quote(do: Enum.map(unquote(from)..unquote(to), unquote(fun)))
+
   defmacro mapper(from, to, fun),
-    do: quote(do: Enum.map(Range.new(unquote(from), unquote(to)), unquote(fun)))
+    do: quote(do: Enum.map(unquote(from)..unquote(to)//-1, unquote(fun)))
 end
