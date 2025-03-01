@@ -194,7 +194,12 @@ defmodule Formulae do
   end
 
   def eval(input, bindings, options) when is_binary(input) do
-    input |> Formulae.compile(options) |> eval(bindings, options)
+    input
+    |> Formulae.compile(options)
+    |> case do
+      nil -> {:error, {:invalid_formulae, [input: input]}}
+      f -> eval(f, bindings, options)
+    end
   end
 
   @doc """
@@ -339,7 +344,7 @@ defmodule Formulae do
       iex> f.eval.(a: 7, b: 0)
       false
   """
-  @spec compile(Formulae.t() | binary(), options :: options()) :: Formulae.t()
+  @spec compile(Formulae.t() | binary(), options :: options()) :: Formulae.t() | nil
   def compile(input, options \\ [])
 
   def compile(input, options) when is_binary(input) and is_list(options) do
@@ -395,7 +400,7 @@ defmodule Formulae do
           input :: binary(),
           options :: options()
         ) ::
-          Formulae.t()
+          nil | Formulae.t()
   defp maybe_create_module({:module, module}, input, options) do
     with {:error, ex} <- validate_compatibility(module, options), do: raise(ex)
 
@@ -514,17 +519,21 @@ defmodule Formulae do
       eval
     ]
 
-    {:module, module, _, _} = input |> module_name(options) |> Module.create(ast, __ENV__)
+    try do
+      {:module, module, _, _} = input |> module_name(options) |> Module.create(ast, __ENV__)
 
-    %Formulae{
-      formula: input,
-      ast: macro,
-      module: module,
-      guard: guard,
-      variables: variables,
-      options: options,
-      eval: &module.eval/1
-    }
+      %Formulae{
+        formula: input,
+        ast: macro,
+        module: module,
+        guard: guard,
+        variables: variables,
+        options: options,
+        eval: &module.eval/1
+      }
+    rescue
+      _e in [CompileError] -> nil
+    end
   end
 
   ##############################################################################

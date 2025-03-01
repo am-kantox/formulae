@@ -5,3 +5,5 @@ if Mix.env() == :test do
     level: :warning,
     backends: [:console]
 end
+
+# config :formulae, :compiler, :finitomata

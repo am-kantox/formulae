@@ -7,7 +7,7 @@ defmodule Formulae.Compiler.AST do
       defmacro ast do
         Code.ensure_compiled!(Finitomata)
 
-        quote do
+        quote generated: true, location: :keep do
           @fsm """
           idle --> |start!| active
           active --> |compile| active
@@ -46,8 +46,14 @@ defmodule Formulae.Compiler.AST do
                 %__MODULE__{formulas: formulas} = state
               )
               when is_binary(formula) do
-            compiled = Formulae.compile(formula, options)
-            {:ok, :active, %__MODULE__{state | formulas: Map.put(formulas, formula, compiled)}}
+            case Formulae.compile(formula, options) do
+              nil ->
+                {:ok, :active, state}
+
+              compiled ->
+                {:ok, :active,
+                 %__MODULE__{state | formulas: Map.put(formulas, formula, compiled)}}
+            end
           end
 
           @spec formulas(id :: Finitomata.id(), name :: Finitomata.fsm_name()) :: %{
@@ -91,14 +97,20 @@ defmodule Formulae.Compiler.AST do
           def eval(id, name, formula, binding) when is_binary(formula),
             do: eval(id, name, {formula, []}, binding)
 
-          def eval(id, name, {formula, options}, binding) when is_binary(formula) do
-            case Finitomata.state(id, name).payload do
-              %__MODULE__{formulas: %{^formula => f}} ->
+          def eval(id, name, {formula, options}, binding) when is_binary(formula),
+            do: do_eval(id, name, {formula, options}, binding, true)
+
+          defp do_eval(id, name, {formula, options}, binding, retry?) when is_binary(formula) do
+            case formulas(id, name) do
+              %{^formula => f} ->
                 eval(id, name, f, binding)
 
-              _state ->
+              _ when retry? ->
                 compile(id, name, formula, options)
-                eval(id, name, formula, binding)
+                do_eval(id, name, {formula, options}, binding, false)
+
+              _ ->
+                nil
             end
           end
         end
@@ -106,7 +118,7 @@ defmodule Formulae.Compiler.AST do
 
     _ ->
       defmacro ast do
-        quote do
+        quote generated: true, location: :keep do
           use GenServer
 
           def start_link(opts \\ []) do
@@ -160,6 +172,9 @@ defmodule Formulae.Compiler.AST do
 
           def eval(_id, _name, %Formulae{} = formula, binding),
             do: Formulae.eval(formula, binding)
+
+          def eval(_id, _name, nil, _),
+            do: nil
 
           def eval(id, name, formula, binding) when is_binary(formula),
             do: eval(id, name, {formula, []}, binding)
