@@ -160,6 +160,10 @@ defmodule Test.Formulae do
     test "works with erlang imports" do
       f = Formulae.compile(":math.pi() + 2", imports: [:math])
       assert Formulae.eval(f, []) > 5
+      f = Formulae.compile("pi() + 2", imports: [:math])
+      assert Formulae.eval(f, []) > 5
+      f = Formulae.compile("pi() + 2", imports: [{:math, pi: 0}])
+      assert Formulae.eval(f, []) > 5
     end
 
     test "works with elixir imports (fqn)" do

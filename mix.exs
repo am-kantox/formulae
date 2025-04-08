@@ -91,7 +91,12 @@ defmodule Formulae.MixProject do
       extras: [
         "README.md"
       ],
-      groups_for_modules: []
+      groups_for_modules: [
+        Combinators: [
+          Formulae.Combinators,
+          Formulae.Combinators.Stream
+        ]
+      ]
     ]
   end
 end
