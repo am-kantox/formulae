@@ -51,8 +51,7 @@ defmodule Formulae.Compiler.AST do
                 {:ok, :active, state}
 
               compiled ->
-                {:ok, :active,
-                 %__MODULE__{state | formulas: Map.put(formulas, formula, compiled)}}
+                {:ok, :active, %{state | formulas: Map.put(formulas, formula, compiled)}}
             end
           end
 
@@ -131,7 +130,7 @@ defmodule Formulae.Compiler.AST do
           @impl GenServer
           def init(%__MODULE__{} = state) do
             formulas = collect_existing()
-            {:ok, %__MODULE__{state | formulas: formulas}}
+            {:ok, %{state | formulas: formulas}}
           end
 
           @spec formulas(id :: term(), name :: term()) :: %{optional(binary()) => Formulae.t()}
@@ -223,7 +222,7 @@ defmodule Formulae.Compiler.AST do
                 {:noreply, state}
 
               compiled ->
-                {:noreply, %__MODULE__{state | formulas: Map.put(formulas, formula, compiled)}}
+                {:noreply, %{state | formulas: Map.put(formulas, formula, compiled)}}
             end
           end
 
